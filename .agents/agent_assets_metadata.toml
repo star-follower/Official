@@ -1,0 +1,9 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "15BhMexzBwhmRcNhMmZ97"
+uri = "file://star-follower-netlify.zip"
+type = "unspecified"
+title = "star-follower-netlify.zip"
+description = "Fixed Star Follower app — all 3 bugs patched (Tutorial Video player, Choice 2 card, Admin save). Ready for Netlify deployment."
