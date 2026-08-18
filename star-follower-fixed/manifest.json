@@ -1,0 +1,22 @@
+{
+  "name": "Star Follower",
+  "short_name": "StarFollower",
+  "icons": [
+    {
+      "src": "/star-icon.jpg",
+      "sizes": "192x192",
+      "type": "image/jpeg",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/star-icon.jpg",
+      "sizes": "512x512",
+      "type": "image/jpeg",
+      "purpose": "any maskable"
+    }
+  ],
+  "start_url": ".",
+  "display": "standalone",
+  "theme_color": "#0f1523",
+  "background_color": "#0f1523"
+}

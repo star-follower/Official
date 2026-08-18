@@ -1,0 +1,14 @@
+# Supabase project configuration
+# Reference: https://supabase.com/docs/guides/local-development/cli/config
+
+project_id = "lgqovwlmicjinwrteivn"
+
+# ── Edge Function settings ────────────────────────────────────────────────
+# verify_jwt = false  →  allows unauthenticated requests (no apikey header needed)
+# This is REQUIRED for CPAlead postback — CPAlead cannot send Supabase auth headers.
+
+[functions.cpalead-webhook]
+verify_jwt = false
+
+[functions.cpalead-postback]
+verify_jwt = false

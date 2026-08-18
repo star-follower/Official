@@ -1,0 +1,810 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <title>Star Follower</title>
+    <meta name="description" content="Star Follower — VIP Instagram Growth Platform" />
+    <meta name="robots" content="index, follow" />
+    <meta property="og:title" content="Star Follower" />
+    <meta property="og:description" content="Star Follower — VIP Instagram Growth Platform" />
+    <meta property="og:type" content="website" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Star Follower" />
+    <meta name="twitter:description" content="Star Follower — VIP Instagram Growth Platform" />
+    <link rel="icon" type="image/jpeg" href="/star-icon.jpg" />
+    <link rel="apple-touch-icon" href="/star-icon.jpg" />
+    <meta name="theme-color" content="#0f1523" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+    <script src="/supabase-api.js?v=20260726"></script>
+    <script type="module" crossorigin src="/assets/index-B3WfkW1_.js"></script>
+    <link rel="stylesheet" crossorigin href="/assets/index-bakB4Qyk.css">
+
+    <style>
+      /*
+       * ═══════════════════════════════════════════════════════════════
+       * LAYER 1 — CSS DEFENSE (fires instantly when React paints)
+       * ═══════════════════════════════════════════════════════════════
+       *
+       * The compiled bundle's logout button has EXACTLY this class:
+       *   "text-muted-foreground hover:text-foreground p-1"
+       * We hide any such button inside <header> that hasn't been
+       * patched yet (no data-sf-done attribute). The instant React
+       * renders it, CSS hides it — user never sees the arrow icon.
+       * Our replacement (data-sf-done) stays visible always.
+       */
+
+      /* Hide the original logout button the moment it appears */
+      header button:not([data-sf-done])[class*="hover:text-foreground"][class*="p-1"] {
+        display: none !important;
+        pointer-events: none !important;
+        visibility: hidden !important;
+        width: 0 !important;
+        overflow: hidden !important;
+      }
+
+      /* Always show our patched gear button */
+      header button[data-sf-done] {
+        display: inline-flex !important;
+        visibility: visible !important;
+        pointer-events: auto !important;
+      }
+
+      /*
+       * Kill every floating / fixed-position settings button
+       * that may have existed in previous builds of this app.
+       */
+      #settings-btn,
+      #sf-settings-fab,
+      .floating-settings,
+      [class*="settings-btn"],
+      [class*="settings-fab"],
+      [id*="floating-settings"],
+      [id*="float-btn"] {
+        display: none !important;
+        pointer-events: none !important;
+      }
+
+      /* ── Full-screen Settings Modal ──────────────────────────── */
+      #sf-settings-modal {
+        display: none;
+        position: fixed;
+        inset: 0;
+        z-index: 999999;          /* on top of everything */
+        background: #0a0f1e;
+        flex-direction: column;
+        font-family: 'Inter', sans-serif;
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+      }
+      #sf-settings-modal.open {
+        display: flex;
+        animation: sf-fade-in 0.22s ease;
+      }
+      @keyframes sf-fade-in {
+        from { opacity: 0; transform: translateY(10px); }
+        to   { opacity: 1; transform: translateY(0); }
+      }
+
+      .sf-modal-inner {
+        width: 100%;
+        max-width: 480px;
+        margin: 0 auto;
+        min-height: 100dvh;
+        display: flex;
+        flex-direction: column;
+      }
+      .sf-modal-hdr {
+        position: sticky;
+        top: 0;
+        z-index: 2;
+        background: rgba(10,15,30,0.97);
+        backdrop-filter: blur(14px);
+        -webkit-backdrop-filter: blur(14px);
+        border-bottom: 1px solid rgba(201,168,76,0.18);
+        padding: 16px 18px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+      }
+      .sf-modal-hdr-title {
+        color: #c9a84c;
+        font-size: 17px;
+        font-weight: 700;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .sf-modal-hdr-close {
+        background: rgba(255,255,255,0.06);
+        border: 1px solid rgba(255,255,255,0.1);
+        color: #9ca3af;
+        width: 34px; height: 34px;
+        border-radius: 50%;
+        font-size: 17px;
+        cursor: pointer;
+        display: flex; align-items: center; justify-content: center;
+        line-height: 1;
+        transition: background 0.15s;
+      }
+      .sf-modal-hdr-close:active { background: rgba(255,255,255,0.12); }
+
+      .sf-modal-body {
+        padding: 22px 18px 48px;
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+      }
+
+      .sf-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        background: rgba(201,168,76,0.1);
+        border: 1px solid rgba(201,168,76,0.22);
+        color: #c9a84c;
+        font-size: 11px;
+        font-weight: 700;
+        padding: 5px 12px;
+        border-radius: 20px;
+        width: fit-content;
+      }
+
+      .sf-section {
+        background: rgba(255,255,255,0.035);
+        border: 1px solid rgba(201,168,76,0.1);
+        border-radius: 16px;
+        padding: 18px;
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+      }
+      .sf-section-title {
+        color: #c9a84c;
+        font-size: 13px;
+        font-weight: 700;
+        padding-bottom: 12px;
+        border-bottom: 1px solid rgba(201,168,76,0.12);
+        margin: 0;
+      }
+      .sf-policy-item { display: flex; flex-direction: column; gap: 3px; }
+      .sf-policy-item h4 { color: #e2e8f0; font-size: 12px; font-weight: 600; margin: 0; }
+      .sf-policy-item p  { color: #6b7280; font-size: 11.5px; line-height: 1.7; margin: 0; }
+
+      .sf-logout-btn {
+        width: 100%;
+        padding: 15px;
+        border: 1px solid rgba(239,68,68,0.4);
+        border-radius: 14px;
+        background: rgba(239,68,68,0.07);
+        color: #ef4444;
+        font-weight: 700;
+        font-size: 15px;
+        cursor: pointer;
+        font-family: 'Inter', sans-serif;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 9px;
+        transition: background 0.18s, border-color 0.18s;
+        margin-top: 4px;
+      }
+      .sf-logout-btn:active {
+        background: rgba(239,68,68,0.14);
+        border-color: rgba(239,68,68,0.55);
+      }
+      .sf-version {
+        color: #2d3748;
+        font-size: 10.5px;
+        text-align: center;
+        margin-top: 8px;
+      }
+
+      /* ── Disable long-press context menu on ALL elements ─────────── */
+      * {
+        -webkit-touch-callout: none !important;
+        -webkit-user-select:   none !important;
+        user-select:           none !important;
+      }
+      /* Allow text selection in text inputs and textareas */
+      input[type="text"], input[type="email"], input[type="password"],
+      input[type="number"], input[type="search"], input[type="url"],
+      input[type="tel"], textarea {
+        -webkit-user-select: text !important;
+        user-select:         text !important;
+      }
+
+      /* ── Device-ID auto-login banner ─────────────────────────── */
+      #sf-dil-wrap {
+        position: fixed;
+        top: 0; left: 0; right: 0;
+        z-index: 99980;
+        display: none;
+        justify-content: center;
+        padding: 10px 14px 0;
+        font-family: 'Inter', sans-serif;
+      }
+      #sf-dil-card {
+        width: 100%;
+        max-width: 480px;
+        background: linear-gradient(135deg, #1a2744 0%, #0f3460 100%);
+        border: 1.5px solid #c9a84c;
+        border-radius: 16px;
+        padding: 13px 15px;
+        display: flex;
+        align-items: center;
+        gap: 11px;
+        box-shadow: 0 4px 28px rgba(201,168,76,0.22);
+        animation: sf-slide-down 0.38s ease;
+      }
+      @keyframes sf-slide-down {
+        from { transform: translateY(-110%); opacity: 0; }
+        to   { transform: translateY(0);     opacity: 1; }
+      }
+      .sf-dil-av {
+        width: 40px; height: 40px; border-radius: 50%;
+        background: linear-gradient(135deg, #c9a84c, #f0d080);
+        display: flex; align-items: center; justify-content: center;
+        font-size: 17px; flex-shrink: 0;
+      }
+      .sf-dil-info { flex: 1; min-width: 0; }
+      .sf-dil-ttl  { color: #c9a84c; font-weight: 700; font-size: 11.5px; margin-bottom: 2px; }
+      .sf-dil-sub  { color: #cbd5e1; font-size: 10.5px; line-height: 1.5; }
+      .sf-dil-login-btn {
+        background: linear-gradient(135deg, #c9a84c, #f0d080);
+        color: #0f1523; border: none; border-radius: 10px;
+        padding: 8px 13px; font-weight: 700; font-size: 11.5px;
+        cursor: pointer; white-space: nowrap;
+        font-family: 'Inter', sans-serif; flex-shrink: 0;
+      }
+      .sf-dil-close-btn {
+        background: none; border: none; color: #4b5563;
+        font-size: 17px; cursor: pointer; flex-shrink: 0;
+        line-height: 1; padding: 0 2px;
+      }
+
+      /* ── Order completion toast ───────────────────────────────── */
+      #sf-order-toast {
+        position: fixed;
+        top: 70px; left: 50%;
+        transform: translateX(-50%);
+        z-index: 999998;
+        width: calc(100% - 28px);
+        max-width: 452px;
+        background: linear-gradient(135deg, #065f46, #047857);
+        border: 1px solid #34d399;
+        border-radius: 16px;
+        padding: 14px 17px;
+        display: none;
+        align-items: center;
+        gap: 12px;
+        box-shadow: 0 6px 28px rgba(52,211,153,0.28);
+        font-family: 'Inter', sans-serif;
+        cursor: pointer;
+      }
+      #sf-order-toast.show {
+        display: flex;
+        animation: sf-toast-in 0.32s ease;
+      }
+      @keyframes sf-toast-in {
+        from { transform: translateX(-50%) translateY(-14px); opacity: 0; }
+        to   { transform: translateX(-50%) translateY(0);     opacity: 1; }
+      }
+      #sf-order-toast .t-ico { font-size: 22px; flex-shrink: 0; }
+      #sf-order-toast .t-body { flex: 1; }
+      #sf-order-toast .t-head { color: #fff; font-weight: 700; font-size: 12.5px; line-height: 1.4; }
+      #sf-order-toast .t-sub  { color: #a7f3d0; font-size: 11px; margin-top: 2px; }
+    </style>
+  </head>
+  <body>
+
+    <!-- ── Direct APK Download Banner ──────────────────────────── -->
+    <div id="sf-apk-banner" role="dialog" aria-label="Download Star Follower APK" style="display:none;position:fixed;bottom:0;left:0;right:0;z-index:99999;background:linear-gradient(135deg,#1a1a2e,#16213e,#0f3460);border-top:2px solid #c9a84c;padding:16px 20px;box-shadow:0 -4px 30px rgba(201,168,76,0.25);font-family:'Inter',sans-serif;box-sizing:border-box;">
+      <button id="sf-apk-close" type="button" aria-label="Close APK download banner" title="Close" style="position:absolute;top:7px;right:10px;background:transparent;color:#cbd5e1;border:0;font-size:22px;line-height:1;cursor:pointer;padding:2px 6px;">×</button>
+      <div style="max-width:480px;margin:0 auto;display:flex;align-items:center;gap:14px;">
+        <img src="/star-icon.jpg" alt="Star Follower" style="width:50px;height:50px;border-radius:12px;border:2px solid #c9a84c;flex-shrink:0;" />
+        <div style="flex:1;min-width:0;">
+          <div style="color:#c9a84c;font-weight:700;font-size:14px;line-height:1.2;margin-bottom:3px;">⭐ Install Star Follower</div>
+          <div style="color:#a0aec0;font-size:12px;line-height:1.4;">Download the Android app directly for instant access.</div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:7px;flex-shrink:0;">
+          <button id="sf-apk-install" type="button" aria-label="Install App (APK)" style="background:linear-gradient(135deg,#c9a84c,#f0d080);color:#0f1523;border:none;border-radius:10px;padding:9px 16px;font-weight:700;font-size:13px;cursor:pointer;white-space:nowrap;font-family:'Inter',sans-serif;">Install App (APK)</button>
+          <button id="sf-apk-dismiss" type="button" style="background:transparent;color:#718096;border:1px solid #2d3748;border-radius:10px;padding:5px 16px;font-size:11px;cursor:pointer;white-space:nowrap;font-family:'Inter',sans-serif;">Not now</button>
+        </div>
+      </div>
+    </div>
+    <!-- ── Device-ID Auto-Login Banner ────────────────────────── -->
+    <div id="sf-dil-wrap">
+      <div id="sf-dil-card">
+        <div class="sf-dil-av">👤</div>
+        <div class="sf-dil-info">
+          <div class="sf-dil-ttl">आपका पुराना अकाउंट मिला!</div>
+          <div class="sf-dil-sub" id="sf-dil-sub">...</div>
+        </div>
+        <button class="sf-dil-login-btn" id="sf-dil-login-btn">1-click Login</button>
+        <button class="sf-dil-close-btn" id="sf-dil-close-btn">✕</button>
+      </div>
+    </div>
+
+    <!-- ── Full-Screen Settings Modal ────────────────────────── -->
+    <div id="sf-settings-modal" role="dialog" aria-modal="true" aria-label="Settings">
+      <div class="sf-modal-inner">
+
+        <div class="sf-modal-hdr">
+          <div class="sf-modal-hdr-title">
+            <!-- Gear SVG -->
+            <svg xmlns="http://www.w3.org/2000/svg" width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+            Settings
+          </div>
+          <button class="sf-modal-hdr-close" id="sf-modal-close">✕</button>
+        </div>
+
+        <div class="sf-modal-body">
+
+          <div class="sf-badge">⭐ Star Follower — Privacy &amp; Policy</div>
+
+          <div class="sf-section">
+            <h3 class="sf-section-title">🔒 आपकी गोपनीयता हमारी प्राथमिकता है</h3>
+
+            <div class="sf-policy-item">
+              <h4>📱 Device ID का उपयोग</h4>
+              <p>हम आपके डिवाइस की एक यूनीक ID सुरक्षित रूप से स्टोर करते हैं। यह ID केवल आपके अकाउंट को पहचानने के लिए उपयोग होती है और किसी के साथ शेयर नहीं की जाती।</p>
+            </div>
+
+            <div class="sf-policy-item">
+              <h4>🔐 क्रेडेंशियल्स की सुरक्षा</h4>
+              <p>आपका यूजरनेम और पासवर्ड केवल आपके डिवाइस पर लोकल रूप से सेव होता है। Star Follower किसी भी थर्ड पार्टी को आपका डेटा नहीं बेचता।</p>
+            </div>
+
+            <div class="sf-policy-item">
+              <h4>📧 ईमेल और फ़ोन — जरूरी नहीं</h4>
+              <p>हम आपसे कोई असली ईमेल, फ़ोन नंबर या व्यक्तिगत जानकारी नहीं मांगते। आप किसी भी रैंडम नाम और पासवर्ड से अकाउंट बना सकते हैं।</p>
+            </div>
+
+            <div class="sf-policy-item">
+              <h4>🪙 ऑर्डर और कॉइन्स</h4>
+              <p>आपके सभी ऑर्डर और कॉइन लेनदेन Star Follower के सुरक्षित सर्वर में सेव होते हैं। कोई भी ऑर्डर की जानकारी केवल आपको दिखती है।</p>
+            </div>
+
+            <div class="sf-policy-item">
+              <h4>📢 नोटिफिकेशन</h4>
+              <p>हम आपको केवल ऐप के अंदर ऑर्डर की स्थिति के बारे में सूचित करते हैं। कोई बाहरी SMS, ईमेल या पुश नोटिफिकेशन नहीं।</p>
+            </div>
+
+            <div class="sf-policy-item">
+              <h4>🗑️ डेटा और अकाउंट</h4>
+              <p>Logout करने पर आपका डेटा सर्वर पर सुरक्षित रहता है। अकाउंट पूरी तरह हटाने के लिए Admin से संपर्क करें।</p>
+            </div>
+          </div>
+
+          <button class="sf-logout-btn" id="sf-logout-btn">
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+            Log Out
+          </button>
+
+          <p class="sf-version">Star Follower v3.0 · 2025 · सभी अधिकार सुरक्षित</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Order Completion Toast ──────────────────────────────── -->
+    <div id="sf-order-toast">
+      <div class="t-ico">✅</div>
+      <div class="t-body">
+        <div class="t-head" id="sf-toast-msg">ऑर्डर सफलतापूर्वक पूरा हो गया!</div>
+        <div class="t-sub">Order History में देखें</div>
+      </div>
+    </div>
+
+    <!-- ── React root ──────────────────────────────────────────── -->
+    <div id="root"></div>
+
+    <script>
+    (function () {
+      'use strict';
+
+      /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+         GEAR SVG (inline, reused by the header patch)
+      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+      var GEAR_SVG = '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>';
+
+      /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+         HELPERS
+      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+      function sfLoggedIn() {
+        return !!(localStorage.getItem('sf_user_id') && localStorage.getItem('sf_token'));
+      }
+
+      /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+         SETTINGS MODAL (open / close)
+      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+      var sfModal = document.getElementById('sf-settings-modal');
+
+      function openSettings()  { sfModal.classList.add('open'); }
+      function closeSettings() { sfModal.classList.remove('open'); }
+
+      document.getElementById('sf-modal-close').addEventListener('click', closeSettings);
+
+      document.getElementById('sf-logout-btn').addEventListener('click', function () {
+        /* Clear all auth keys */
+        ['sf_user_id','sf_token'].forEach(function (k) { localStorage.removeItem(k); });
+        closeSettings();
+        /* Hard-navigate so React Router sends user back to /login */
+        window.location.replace('/');
+      });
+
+      /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+         HEADER LOGOUT → SETTINGS GEAR
+         ─────────────────────────────────────────────────────────
+         Three-layer defense:
+           Layer 1 – CSS already hides the original button above.
+           Layer 2 – patchLogout() replaces it with our gear button.
+           Layer 3 – setInterval + MutationObserver re-run
+                     patchLogout() if React ever re-renders it.
+      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+      function patchLogout() {
+        /* Find the logout button: class contains both markers,
+           AND has NOT been patched yet (no data-sf-done). */
+        var btn = document.querySelector(
+          'header button:not([data-sf-done])[class*="hover:text-foreground"][class*="p-1"]'
+        );
+        if (!btn) return; /* already patched or header not rendered yet */
+
+        var parent = btn.parentNode;
+        if (!parent) return;
+
+        /* Build our replacement — a fresh element with the SAME
+           Tailwind classes so it inherits the same visual style. */
+        var gear = document.createElement('button');
+        gear.className         = btn.className; /* keep Tailwind styles */
+        gear.setAttribute('data-sf-done', 'true');
+        gear.setAttribute('title',        'Settings');
+        gear.setAttribute('aria-label',   'Settings');
+        gear.innerHTML = GEAR_SVG;
+
+        /* Native listener in CAPTURE phase beats React's bubble phase */
+        gear.addEventListener('click', function (e) {
+          e.preventDefault();
+          e.stopPropagation();
+          e.stopImmediatePropagation();
+          openSettings();
+        }, true /* capture */);
+
+        /* Swap nodes — removes the original button (and its React
+           fiber listeners) from the live DOM entirely. */
+        parent.replaceChild(gear, btn);
+      }
+
+      /* Layer 3a — poll every 300 ms for the first 8 s, then every 2 s */
+      var _fast = setInterval(patchLogout, 300);
+      setTimeout(function () {
+        clearInterval(_fast);
+        setInterval(patchLogout, 2000);
+      }, 8000);
+
+      /* Layer 3b — MutationObserver (fires synchronously on any DOM change) */
+      new MutationObserver(function (mutations) {
+        for (var i = 0; i < mutations.length; i++) {
+          var added = mutations[i].addedNodes;
+          for (var j = 0; j < added.length; j++) {
+            if (added[j].nodeType === 1) { patchLogout(); break; }
+          }
+        }
+      }).observe(document.body, { childList: true, subtree: true });
+
+      /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+         DIRECT APK DOWNLOAD BANNER
+      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+      var APK_DOWNLOAD_URL = 'https://drive.google.com/uc?export=download&id=1aWkp8uCJ18OmKfXViYvgImfG_blyXFGL';
+      var _apkBanner = document.getElementById('sf-apk-banner');
+      var _apkInstallButton = document.getElementById('sf-apk-install');
+      function isStandaloneMode() {
+        return window.matchMedia('(display-mode: standalone)').matches ||
+          window.matchMedia('(display-mode: fullscreen)').matches ||
+          window.matchMedia('(display-mode: minimal-ui)').matches ||
+          window.navigator.standalone === true ||
+          window.__SF_APK_MODE === true ||
+          localStorage.getItem('sf_apk_installed') === '1' ||
+          /StarFollower|Star Follower|;\s*wv\)|\bwv\b/i.test(navigator.userAgent || '');
+      }
+      function showApkBanner() {
+        if (isStandaloneMode()) {
+          _apkBanner.style.display = 'none';
+          return;
+        }
+        if (!sessionStorage.getItem('apk-dismissed')) _apkBanner.style.display = 'block';
+      }
+      if (isStandaloneMode()) _apkBanner.style.display = 'none';
+      window.addEventListener('load', showApkBanner);
+      _apkInstallButton.addEventListener('click', function () {
+        window.open(APK_DOWNLOAD_URL, '_blank');
+      });
+      document.getElementById('sf-apk-dismiss').addEventListener('click', function () {
+        _apkBanner.style.display = 'none';
+        sessionStorage.setItem('apk-dismissed', '1');
+      });
+      document.getElementById('sf-apk-close').addEventListener('click', function () {
+        _apkBanner.style.display = 'none';
+      });
+
+      /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+         DEVICE-ID AUTO-LOGIN BANNER
+      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+      (function () {
+        var wrap    = document.getElementById('sf-dil-wrap');
+        var sub     = document.getElementById('sf-dil-sub');
+        var loginBt = document.getElementById('sf-dil-login-btn');
+        var closeBt = document.getElementById('sf-dil-close-btn');
+        var creds   = null;
+
+        try { creds = JSON.parse(localStorage.getItem('sf_saved_creds') || 'null'); } catch (e) {}
+        if (!creds || !creds.name || !creds.password) return;
+
+        /* Show after React mounts, only when logged out */
+        setTimeout(function () {
+          if (sfLoggedIn()) return;
+          sub.innerHTML =
+            '<span style="color:#c9a84c;">👤</span> ' + creds.name +
+            ' &nbsp;<span style="color:#c9a84c;">🔑</span> ' +
+            creds.password.replace(/./g, '●');
+          wrap.style.display = 'flex';
+        }, 1400);
+
+        closeBt.addEventListener('click', function (e) {
+          e.stopPropagation();
+          wrap.style.display = 'none';
+        });
+
+        loginBt.addEventListener('click', function () {
+          loginBt.textContent = '...';
+          loginBt.disabled    = true;
+
+          fetch('/api/auth/login', {
+            method:  'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body:    JSON.stringify({
+              name:     creds.name,
+              password: creds.password,
+              deviceId: localStorage.getItem('sf_device_id') || ''
+            })
+          })
+          .then(function (r) { return r.json(); })
+          .then(function (d) {
+            if (d && d.userId && d.token) {
+              localStorage.setItem('sf_user_id', d.userId);
+              localStorage.setItem('sf_token',   d.token);
+              wrap.style.display = 'none';
+              window.location.replace('/');
+            } else {
+              loginBt.textContent = '1-click Login';
+              loginBt.disabled    = false;
+              sub.innerHTML += '<br><span style="color:#ef4444;font-size:10px;">Login failed — please tap again</span>';
+            }
+          })
+          .catch(function () {
+            loginBt.textContent = '1-click Login';
+            loginBt.disabled    = false;
+          });
+        });
+      }());
+
+      /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+         ORDER COMPLETION TOAST
+      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+      (function () {
+        var SVC = [
+          'Instagram Followers [90 Days Guarantee]',
+          'Instagram Followers [High Quality]',
+          'Instagram Likes [90 Days Guarantee]',
+          'Instagram Likes [Fast Delivery]',
+          'Instagram Story Views', 'Instagram Reel Views',
+          'Instagram Post Views', 'Instagram Saves', 'Instagram Comments'
+        ];
+
+        var toast    = document.getElementById('sf-order-toast');
+        var toastMsg = document.getElementById('sf-toast-msg');
+        var _timer   = null;
+        var _lastChk = 0;
+        var INTERVAL = 60000;
+
+        toast.addEventListener('click', function () {
+          clearTimeout(_timer);
+          toast.classList.remove('show');
+        });
+
+        function showToast(msg) {
+          clearTimeout(_timer);
+          toastMsg.textContent = msg;
+          toast.classList.add('show');
+          _timer = setTimeout(function () { toast.classList.remove('show'); }, 9000);
+        }
+
+        function checkCompleted() {
+          if (!sfLoggedIn()) return;
+          var now = Date.now();
+          if (now - _lastChk < INTERVAL) return;
+          _lastChk = now;
+
+          var uid   = localStorage.getItem('sf_user_id');
+          var token = localStorage.getItem('sf_token');
+
+          fetch('/api/user/' + uid, {
+            headers: { Authorization: 'Bearer ' + token }
+          })
+          .then(function (r) { return r.json(); })
+          .then(function (data) {
+            var list = (data && Array.isArray(data.newCompleted)) ? data.newCompleted : [];
+            list.forEach(function (o, i) {
+              setTimeout(function () {
+                showToast(
+                  'आपका ' + o.quantity + ' ' +
+                  (SVC[o.serviceIndex] || 'Service') +
+                  ' का ऑर्डर सफलतापूर्वक पूरा हो चुका है! 🎉'
+                );
+              }, i * 10000);
+            });
+          })
+          .catch(function () {});
+        }
+
+        setTimeout(function () {
+          checkCompleted();
+          setInterval(checkCompleted, INTERVAL);
+        }, 5000);
+
+        document.addEventListener('visibilitychange', function () {
+          if (!document.hidden) { _lastChk = 0; checkCompleted(); }
+        });
+      }());
+
+    }()); /* end IIFE */
+
+    /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+       TIMEWALL — Chrome Custom Tabs / In-App Browser Launcher
+       ─────────────────────────────────────────────────────────
+       Problem: offerwalls (including TimeWall) detect when they
+       are loaded inside an <iframe> and show a "session blocked"
+       error because iframes break their session cookies & OAuth.
+
+       Solution — four interception layers (earliest to latest):
+         1. Patch document.createElement to block iframe creation
+            for offerwall URLs and redirect to window.open instead.
+         2. MutationObserver: remove any offerwall <iframe> that
+            React manages to insert and open it externally.
+         3. Click capture on <a> tags pointing to offerwall URLs.
+         4. Patch window.open to always force _blank + subid.
+
+       On Android, window.open('_blank') triggers Chrome Custom
+       Tabs which inherits the app theme-color toolbar tint.
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+    (function () {
+      'use strict';
+
+      // ── Patterns that identify a TimeWall / offerwall URL ─────────
+      var TW_PATTERNS = [
+        'timewall.io', 'go.timewall', 'offers.timewall',
+        'timewall', 'offerwall'
+      ];
+
+      function isOfferwallUrl(href) {
+        if (!href || typeof href !== 'string') return false;
+        var lower = href.toLowerCase();
+        for (var i = 0; i < TW_PATTERNS.length; i++) {
+          if (lower.indexOf(TW_PATTERNS[i]) !== -1) return true;
+        }
+        return false;
+      }
+
+      // ── Inject logged-in user UUID as &subid= ─────────────────────
+      function injectSubid(href) {
+        var uid = localStorage.getItem('sf_user_id') || '';
+        if (!uid) return href;
+        try {
+          var u = new URL(href);
+          var existing = u.searchParams.get('subid') || '';
+          // Replace if absent or still a template placeholder
+          if (!existing || /^\{.*\}$/.test(existing) || /^\[.*\]$/.test(existing)) {
+            u.searchParams.set('subid', uid);
+          }
+          return u.toString();
+        } catch (_) {
+          if (href.indexOf('subid=') === -1) {
+            return href + (href.indexOf('?') === -1 ? '?' : '&') +
+                   'subid=' + encodeURIComponent(uid);
+          }
+          return href;
+        }
+      }
+
+      // ── Open in Chrome Custom Tabs (Android) / new tab ────────────
+      function openExternal(href) {
+        href = injectSubid(href);
+        // window.open(_blank) → Chrome Custom Tabs on Android PWA.
+        // noopener prevents the child from accessing window.opener.
+        var win = window.open(href, '_blank', 'noopener,noreferrer');
+        if (!win) {
+          // Pop-up blocked (desktop) → same-tab fallback
+          window.location.href = href;
+        }
+      }
+
+      // ── LAYER 1: patch document.createElement ─────────────────────
+      // Intercept iframe elements before they are added to the DOM.
+      // When React tries to create an offerwall iframe, we return a
+      // throwaway <span> so nothing gets inserted, then open externally.
+      var _realCreate = document.createElement.bind(document);
+      document.createElement = function (tag) {
+        var el = _realCreate.apply(document, arguments);
+        if (typeof tag === 'string' && tag.toLowerCase() === 'iframe') {
+          // Proxy the src setter so we catch the URL when React sets it
+          var _srcVal = '';
+          Object.defineProperty(el, 'src', {
+            get: function () { return _srcVal; },
+            set: function (val) {
+              _srcVal = val;
+              if (isOfferwallUrl(val)) {
+                // Prevent actual load — clear the src and open externally
+                setTimeout(function () { openExternal(val); }, 0);
+                _srcVal = 'about:blank';
+              }
+            },
+            configurable: true
+          });
+        }
+        return el;
+      };
+
+      // ── LAYER 2: MutationObserver — catch any iframe React inserts ─
+      // Belt-and-suspenders: if an offerwall iframe reaches the DOM
+      // (e.g. React set src before our createElement patch ran),
+      // remove it and open the URL externally.
+      new MutationObserver(function (mutations) {
+        mutations.forEach(function (m) {
+          m.addedNodes.forEach(function (node) {
+            if (node.nodeType !== 1) return;
+            // Check the node itself and all descendant iframes
+            var iframes = [];
+            if (node.tagName === 'IFRAME') iframes.push(node);
+            iframes = iframes.concat(Array.prototype.slice.call(
+              node.querySelectorAll ? node.querySelectorAll('iframe') : []
+            ));
+            iframes.forEach(function (ifr) {
+              var src = ifr.src || ifr.getAttribute('src') || '';
+              if (isOfferwallUrl(src)) {
+                // Remove from DOM before it loads → no session block
+                if (ifr.parentNode) ifr.parentNode.removeChild(ifr);
+                openExternal(src);
+              }
+            });
+          });
+        });
+      }).observe(document.documentElement, { childList: true, subtree: true });
+
+      // ── LAYER 3: click capture on <a> tags ────────────────────────
+      document.addEventListener('click', function (e) {
+        var el = e.target;
+        while (el && el.tagName !== 'A') el = el.parentElement;
+        if (!el) return;
+        var href = el.getAttribute('href') || '';
+        if (!href || href === '#' || href.startsWith('javascript:')) return;
+        if (!isOfferwallUrl(href)) return;
+        e.preventDefault();
+        e.stopPropagation();
+        openExternal(href);
+      }, true /* capture phase — runs before React bubble handlers */);
+
+      // ── LAYER 4: patch window.open ────────────────────────────────
+      // The compiled bundle may call window.open() directly.
+      var _realOpen = window.open.bind(window);
+      window.open = function (url, target, features) {
+        if (typeof url === 'string' && isOfferwallUrl(url)) {
+          return _realOpen(injectSubid(url), '_blank', 'noopener,noreferrer');
+        }
+        return _realOpen(url, target, features);
+      };
+
+    }());
