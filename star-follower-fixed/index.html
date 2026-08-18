@@ -12,13 +12,17 @@
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="Star Follower" />
     <meta name="twitter:description" content="Star Follower — VIP Instagram Growth Platform" />
-    <base href="/Official/" />
+    <!-- Keep the authored build base relative for GitHub Pages. The bootstrap
+         below resolves the repository root for deep-link refreshes. -->
+    <base href="./" />
     <script>
       (function () {
         var path = window.location.pathname || '';
         window.__SF_BASE_PATH = /^\/Official(?:\/|$)/i.test(path)
           ? '/Official/'
           : '/';
+        var baseTag = document.querySelector('base');
+        if (baseTag) baseTag.setAttribute('href', window.__SF_BASE_PATH);
         window.__sfAppPath = function (route) {
           var base = window.__SF_BASE_PATH || '/';
           var clean = String(route || '/').replace(/^\/+/, '');
