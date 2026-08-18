@@ -3,13 +3,21 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <base href="/Official/" />
+    <base href="./" />
     <title>Star Follower</title>
   </head>
   <body>
     <p>Loading Star Follower…</p>
     <script>
-      fetch("./index.html")
+      (function () {
+        var path = window.location.pathname || "";
+        var basePath = /^\/Official(?:\/|$)/i.test(path)
+          ? "/Official/"
+          : "/";
+        var baseTag = document.querySelector("base");
+        if (baseTag) baseTag.setAttribute("href", basePath);
+
+        fetch(basePath + "index.html")
         .then(function (response) {
           if (!response.ok) throw new Error("Unable to load app shell");
           return response.text();
@@ -22,6 +30,7 @@
         .catch(function () {
           document.body.textContent = "Unable to load Star Follower.";
         });
+      }());
     </script>
   </body>
 </html>
