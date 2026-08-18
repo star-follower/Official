@@ -43,8 +43,20 @@
     return !!(localStorage.getItem('sf_user_id') && localStorage.getItem('sf_token'));
   }
 
+  function getAppRoutePath() {
+    return window.__sfRoutePath
+      ? window.__sfRoutePath()
+      : (window.location.pathname.replace(/\/+$/, '') || '/');
+  }
+
+  function getAppUrl(route) {
+    return window.__sfAppPath
+      ? window.__sfAppPath(route)
+      : route;
+  }
+
   function updateRouteClasses() {
-    var path = window.location.pathname.replace(/\/+$/, '') || '/';
+    var path = getAppRoutePath();
     document.body.classList.toggle('sf-login', path === '/login');
     document.body.classList.toggle('sf-home', path === '/' && isLoggedIn());
     document.body.classList.toggle('sf-earn', path === '/earn' && isLoggedIn());
@@ -67,7 +79,7 @@
   }
 
   function isDashboardRoute() {
-    var path = window.location.pathname.replace(/\/+$/, '') || '/';
+    var path = getAppRoutePath();
     return path === '/' || path === '/dashboard';
   }
 
@@ -116,7 +128,7 @@
     event.preventDefault();
     event.stopPropagation();
     event.stopImmediatePropagation();
-    window.location.assign(isLoggedIn() ? '/' : '/login');
+    window.location.assign(getAppUrl(isLoggedIn() ? '/' : '/login'));
   }
 
   function hideApkBannerInApp() {
@@ -282,7 +294,7 @@
       }
       localStorage.setItem('sf_user_id', result.data.userId);
       localStorage.setItem('sf_token', result.data.token);
-      window.location.replace('/');
+      window.location.replace(getAppUrl('/'));
     }).catch(function (error) {
       button.disabled = false;
       button.textContent = 'Recover Account';
@@ -291,7 +303,7 @@
   }
 
   function patchRecoveryForm() {
-    if ((window.location.pathname.replace(/\/+$/, '') || '/') !== '/login') return;
+    if (getAppRoutePath() !== '/login') return;
     var input = document.querySelector(
       '#root input[placeholder*="Recovery"], #root input[placeholder*="recovery"]'
     );
@@ -388,7 +400,7 @@
     updateRouteClasses();
     document.body.classList.toggle(
       'sf-services',
-      (window.location.pathname.replace(/\/+$/, '') || '/') === '/services' && isLoggedIn()
+      getAppRoutePath() === '/services' && isLoggedIn()
     );
     ensureHeaderCoins();
     syncSuccessfulOrdersCounter();

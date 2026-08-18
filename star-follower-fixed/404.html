@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <base href="/Official/" />
+    <title>Star Follower</title>
+  </head>
+  <body>
+    <p>Loading Star Follower…</p>
+    <script>
+      fetch("./index.html")
+        .then(function (response) {
+          if (!response.ok) throw new Error("Unable to load app shell");
+          return response.text();
+        })
+        .then(function (html) {
+          document.open();
+          document.write(html);
+          document.close();
+        })
+        .catch(function () {
+          document.body.textContent = "Unable to load Star Follower.";
+        });
+    </script>
+  </body>
+</html>

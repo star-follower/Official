@@ -1,5 +1,11 @@
-const CACHE_NAME = "star-follower-20260808-pwa-recovery-fix";
-const STATIC_ASSETS = ["/", "/star-icon.jpg", "/manifest.json", "/supabase-api.js"];
+const CACHE_NAME = "star-follower-20260818-official-base-path";
+const BASE_PATH = new URL("./", self.location.href).pathname;
+const STATIC_ASSETS = [
+  BASE_PATH,
+  BASE_PATH + "star-icon.jpg",
+  BASE_PATH + "manifest.json",
+  BASE_PATH + "supabase-api.js"
+];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
@@ -20,7 +26,10 @@ self.addEventListener("activate", (event) => {
 self.addEventListener("fetch", (event) => {
   // Never intercept API calls — let supabase-api.js handle them in the main thread
   const url = new URL(event.request.url);
-  if (url.pathname.startsWith("/api/")) return;
+  if (
+    url.pathname.startsWith("/api/") ||
+    url.pathname.startsWith(BASE_PATH + "api/")
+  ) return;
   // Never intercept Supabase or CDN calls
   if (url.hostname.includes("supabase") || url.hostname.includes("jsdelivr")) return;
   // Only cache GET requests

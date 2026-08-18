@@ -12,16 +12,68 @@
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="Star Follower" />
     <meta name="twitter:description" content="Star Follower — VIP Instagram Growth Platform" />
-    <link rel="icon" type="image/jpeg" href="/star-icon.jpg" />
-    <link rel="apple-touch-icon" href="/star-icon.jpg" />
+    <base href="/Official/" />
+    <script>
+      (function () {
+        var path = window.location.pathname || '';
+        window.__SF_BASE_PATH = /^\/Official(?:\/|$)/i.test(path)
+          ? '/Official/'
+          : '/';
+        window.__sfAppPath = function (route) {
+          var base = window.__SF_BASE_PATH || '/';
+          var clean = String(route || '/').replace(/^\/+/, '');
+          return base + clean;
+        };
+        window.__sfRoutePath = function () {
+          var pathname = window.location.pathname || '/';
+          var baseRoot = (window.__SF_BASE_PATH || '/').replace(/\/+$/, '');
+          if (baseRoot && pathname.indexOf(baseRoot) === 0) {
+            pathname = pathname.slice(baseRoot.length) || '/';
+          }
+          return pathname.replace(/\/+$/, '') || '/';
+        };
+      }());
+    </script>
+    <link rel="icon" type="image/jpeg" href="./star-icon.jpg" />
+    <link rel="apple-touch-icon" href="./star-icon.jpg" />
+    <link rel="manifest" href="./manifest.json" />
     <meta name="theme-color" content="#0f1523" />
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
-    <script src="/supabase-api.js?v=20260808"></script>
-    <script type="module" crossorigin src="/assets/index-B3WfkW1_.js"></script>
-    <link rel="stylesheet" crossorigin href="/assets/index-bakB4Qyk.css">
+    <script src="./supabase-api.js?v=20260818-base-path"></script>
+    <script type="module">
+      /*
+       * The uploaded app is a production bundle rather than a Vite source
+       * tree. Apply the base path to the compiled router/API helpers before
+       * importing it, keeping the deployment bundle reproducible.
+       */
+      var sfBase = window.__SF_BASE_PATH || '/';
+      var sfBundleUrl = sfBase + 'assets/index-B3WfkW1_.js';
+      var sfBundle = await fetch(sfBundleUrl).then(function (response) {
+        if (!response.ok) throw new Error('Unable to load app bundle');
+        return response.text();
+      });
+      sfBundle = sfBundle
+        .replace(
+          'tC="".replace(/\/+$/,"");function lb(n){return tC+n}function qr(n,r){return fetch(lb(n),r)}',
+          'tC=(window.__SF_BASE_PATH||"").replace(/\/+$/,"");function lb(n){return tC+n}function qr(n,r){return fetch(n,r)}'
+        )
+        .replace('const nC="/assets/', 'const nC=(window.__SF_BASE_PATH||"")+"/assets/')
+        .replace('const ZA="/assets/', 'const ZA=(window.__SF_BASE_PATH||"")+"/assets/')
+        .replace('const JA="/assets/', 'const JA=(window.__SF_BASE_PATH||"")+"/assets/')
+        .replace(
+          'https://star-follower.netlify.app',
+          'https://star-follower.github.io/Official/'
+        );
+      var sfBundleBlob = URL.createObjectURL(
+        new Blob([sfBundle], { type: 'text/javascript' })
+      );
+      await import(sfBundleBlob);
+      URL.revokeObjectURL(sfBundleBlob);
+    </script>
+    <link rel="stylesheet" crossorigin href="./assets/index-bakB4Qyk.css">
 
     <style>
       /*
@@ -426,7 +478,7 @@
     <div id="sf-apk-banner" role="dialog" aria-label="Download Star Follower APK" style="display:none;position:fixed;bottom:0;left:0;right:0;z-index:99999;background:linear-gradient(135deg,#1a1a2e,#16213e,#0f3460);border-top:2px solid #c9a84c;padding:16px 20px;box-shadow:0 -4px 30px rgba(201,168,76,0.25);font-family:'Inter',sans-serif;box-sizing:border-box;">
       <button id="sf-apk-close" type="button" aria-label="Close APK download banner" title="Close" style="position:absolute;top:7px;right:10px;background:transparent;color:#cbd5e1;border:0;font-size:22px;line-height:1;cursor:pointer;padding:2px 6px;">×</button>
       <div style="max-width:480px;margin:0 auto;display:flex;align-items:center;gap:14px;">
-        <img src="/star-icon.jpg" alt="Star Follower" style="width:50px;height:50px;border-radius:12px;border:2px solid #c9a84c;flex-shrink:0;" />
+         <img src="./star-icon.jpg" alt="Star Follower" style="width:50px;height:50px;border-radius:12px;border:2px solid #c9a84c;flex-shrink:0;" />
         <div style="flex:1;min-width:0;">
           <div style="color:#c9a84c;font-weight:700;font-size:14px;line-height:1.2;margin-bottom:3px;">⭐ Install Star Follower</div>
           <div style="color:#a0aec0;font-size:12px;line-height:1.4;">Download the Android app directly for instant access.</div>
@@ -554,7 +606,7 @@
         ['sf_user_id','sf_token'].forEach(function (k) { localStorage.removeItem(k); });
         closeSettings();
         /* Hard-navigate so React Router sends user back to /login */
-        window.location.replace('/');
+        window.location.replace(window.__sfAppPath('/'));
       });
 
       /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -716,7 +768,7 @@
               localStorage.setItem('sf_user_id', d.userId);
               localStorage.setItem('sf_token',   d.token);
               wrap.style.display = 'none';
-              window.location.replace('/');
+              window.location.replace(window.__sfAppPath('/'));
             } else {
               loginBt.textContent = '1-click Login';
               loginBt.disabled    = false;
@@ -862,7 +914,9 @@
        var TIMEWALL_PENDING_KEY = 'sf_timewall_pending';
 
        function getCurrentAppRoute() {
-         var path = window.location.pathname.replace(/\/+$/, '') || '/';
+         var path = window.__sfRoutePath
+           ? window.__sfRoutePath()
+           : (window.location.pathname.replace(/\/+$/, '') || '/');
          var hash = window.location.hash || '';
          if (hash.toLowerCase().indexOf('earn') !== -1 || path === '/earn') return '/earn';
          // This bundle serves the dashboard at "/", while older builds used
@@ -907,7 +961,11 @@
 
          // Replacing the same route is intentional when Chrome returns with
          // an empty React root; it remounts the app instead of leaving white.
-         if (current !== route || isBlank) window.location.replace(route);
+         if (current !== route || isBlank) {
+           window.location.replace(
+             window.__sfAppPath ? window.__sfAppPath(route) : route
+           );
+         }
        }
 
        document.addEventListener('visibilitychange', function () {
