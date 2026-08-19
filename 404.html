@@ -21,14 +21,19 @@
         window.__SF_BASE_PATH = /^\/Official(?:\/|$)/i.test(path)
           ? '/Official/'
           : '/';
+        window.__SF_HASH_ROUTING = true;
         var baseTag = document.querySelector('base');
         if (baseTag) baseTag.setAttribute('href', window.__SF_BASE_PATH);
         window.__sfAppPath = function (route) {
           var base = window.__SF_BASE_PATH || '/';
           var clean = String(route || '/').replace(/^\/+/, '');
-          return base + clean;
+          return base + '#' + (clean ? '/' + clean : '/');
         };
         window.__sfRoutePath = function () {
+          var hash = window.location.hash || '';
+          if (/^#\/?/.test(hash) && hash.length > 1) {
+            return ('/' + hash.slice(1).replace(/^\/+/, '')).replace(/\/+$/, '') || '/';
+          }
           var pathname = window.location.pathname || '/';
           var baseRoot = (window.__SF_BASE_PATH || '/').replace(/\/+$/, '');
           if (baseRoot && pathname.indexOf(baseRoot) === 0) {
@@ -63,6 +68,14 @@
         .replace(
           'tC="".replace(/\/+$/,"");function lb(n){return tC+n}function qr(n,r){return fetch(lb(n),r)}',
           'tC=(window.__SF_BASE_PATH||"").replace(/\/+$/,"");function lb(n){return tC+n}function qr(n,r){return fetch(n,r)}'
+        )
+        .replace(
+          'Ip=()=>location.pathname,$1=',
+          'Ip=()=>{const n=location.hash.slice(1);if(n)return n.startsWith("/")?n:"/"+n;const p=location.pathname,b=(window.__SF_BASE_PATH||"/").replace(/\\/+$/,"");return b&&p.indexOf(b)===0?(p.slice(b.length)||"/"):p},$1='
+        )
+        .replace(
+          'J1=(n,{replace:r=!1,state:i=null}={})=>history[r?mf:hf](i,"",n)',
+          'J1=(n,{replace:r=!1,state:i=null}={})=>{const o=(window.__SF_BASE_PATH||"/").replace(/\\/+$/,""),e=n&&n.startsWith("/")?n:"/"+(n||"");history[r?mf:hf](i,"",o+"#"+e)}'
         )
         .replace('const nC="/assets/', 'const nC=(window.__SF_BASE_PATH||"")+"/assets/')
         .replace('const ZA="/assets/', 'const ZA=(window.__SF_BASE_PATH||"")+"/assets/')
@@ -675,7 +688,7 @@
       /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
          DIRECT APK DOWNLOAD BANNER
       ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
-      var APK_DOWNLOAD_URL = 'https://drive.google.com/uc?export=download&id=1aWkp8uCJ18OmKfXViYvgImfG_blyXFGL';
+      var APK_DOWNLOAD_URL = 'https://files.catbox.moe/4709nq.apk';
       var _apkBanner = document.getElementById('sf-apk-banner');
       var _apkInstallButton = document.getElementById('sf-apk-install');
       var _apkDismiss = function () {
@@ -720,7 +733,7 @@
       if (isStandaloneMode()) hideApkBanner();
       window.addEventListener('load', showApkBanner);
       _apkInstallButton.addEventListener('click', function () {
-        window.open(APK_DOWNLOAD_URL, '_blank');
+        window.location.assign(APK_DOWNLOAD_URL);
       });
       document.getElementById('sf-apk-dismiss').addEventListener('click', _apkDismiss);
       document.getElementById('sf-apk-close').addEventListener('click', _apkDismiss);

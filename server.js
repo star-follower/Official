@@ -4,7 +4,7 @@ const path = require('path');
 const fs = require('fs');
 
 const PORT = process.env.PORT || 5000;
-const APK_DOWNLOAD_URL = 'https://drive.usercontent.google.com/download?id=1aWkp8uCJ18OmKfXViYvgImfG_blyXFGL&export=download&confirm=t';
+const APK_DOWNLOAD_URL = 'https://files.catbox.moe/4709nq.apk';
 const ROOT = __dirname;
 
 const MIME_TYPES = {
