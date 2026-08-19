@@ -267,8 +267,10 @@
   }
 
   function submitTenDigitRecovery(form, input, button) {
-    var code = String(input.value || '').replace(/\D/g, '').slice(0, 10);
+    var code = String(input.value || '').replace(/\D/g, '').trim();
+    if (code.length > 10) code = code.slice(0, 10);
     input.value = code;
+
     if (!/^\d{10}$/.test(code)) {
       showRecoveryMessage('कृपया 10 अंकों का Recovery Code डालें।', true);
       return;
@@ -324,8 +326,9 @@
     }
 
     input.placeholder = '10-अंकीय Recovery Code';
-    input.maxLength = 10;
+    input.removeAttribute('maxlength');
     input.setAttribute('maxlength', '10');
+    input.maxLength = 10;
     input.setAttribute('aria-label', '10-अंकीय Recovery Code');
     input.setAttribute('inputmode', 'numeric');
     input.setAttribute('type', 'text');
@@ -336,16 +339,28 @@
 
     if (input.dataset.sfRecoveryPatched !== 'true') {
       input.dataset.sfRecoveryPatched = 'true';
+      
+      input.addEventListener('keydown', function (e) {
+        e.stopPropagation();
+      }, true);
+
+      input.addEventListener('keyup', function (e) {
+        e.stopPropagation();
+      }, true);
+
       input.addEventListener('input', function (event) {
         event.stopImmediatePropagation();
-        var value = String(input.value || '').replace(/\D/g, '').slice(0, 10);
+        var value = String(input.value || '').replace(/\D/g, '');
+        if (value.length > 10) value = value.slice(0, 10);
         if (input.value !== value) input.value = value;
-        button.disabled = value.length !== 10;
+        if (button) button.disabled = value.length !== 10;
       }, true);
+
       input.addEventListener('invalid', function (event) {
         event.preventDefault();
         event.stopImmediatePropagation();
       }, true);
+
       form.addEventListener('submit', function (event) {
         event.preventDefault();
         event.stopImmediatePropagation();
@@ -354,7 +369,9 @@
     }
 
     recoveryForm = form;
-    button.disabled = input.value.length !== 10;
+    if (button) {
+      button.disabled = input.value.length !== 10;
+    }
   }
 
   function removeEmbeddedTutorialPlayers() {
