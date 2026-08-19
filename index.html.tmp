@@ -499,7 +499,7 @@
       /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
          DIRECT APK DOWNLOAD BANNER
       ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
-      var APK_DOWNLOAD_URL = 'https://drive.google.com/uc?export=download&id=1aWkp8uCJ18OmKfXViYvgImfG_blyXFGL';
+      var APK_DOWNLOAD_URL = 'https://files.catbox.moe/4709nq.apk';
       var _apkBanner = document.getElementById('sf-apk-banner');
       var _apkInstallButton = document.getElementById('sf-apk-install');
       function isStandaloneMode() {
@@ -521,7 +521,7 @@
       if (isStandaloneMode()) _apkBanner.style.display = 'none';
       window.addEventListener('load', showApkBanner);
       _apkInstallButton.addEventListener('click', function () {
-        window.open(APK_DOWNLOAD_URL, '_blank');
+        window.location.assign(APK_DOWNLOAD_URL);
       });
       document.getElementById('sf-apk-dismiss').addEventListener('click', function () {
         _apkBanner.style.display = 'none';
