@@ -6,9 +6,11 @@
     <title>Star Follower</title>
     <meta name="description" content="Star Follower — VIP Instagram Growth Platform" />
     <meta name="robots" content="index, follow" />
-    <meta property="og:title" content="Star Follower" />
-    <meta property="og:description" content="Star Follower — VIP Instagram Growth Platform" />
+    <meta property="og:title" content="Star Follower: अपने Instagram को बनाएं VIP! ⭐️" />
+    <meta property="og:description" content="फॉलोअर्स, लाइक, कमेंट्स और रील्स व्यूज बढ़ाएं!" />
     <meta property="og:type" content="website" />
+    <meta property="og:image" content="https://star-follower.github.io/Official/logo.png" />
+    <meta property="og:url" content="https://star-follower.github.io/Official/" />
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="Star Follower" />
     <meta name="twitter:description" content="Star Follower — VIP Instagram Growth Platform" />
@@ -80,6 +82,19 @@
         .replace('const nC="/assets/', 'const nC=(window.__SF_BASE_PATH||"")+"/assets/')
         .replace('const ZA="/assets/', 'const ZA=(window.__SF_BASE_PATH||"")+"/assets/')
         .replace('const JA="/assets/', 'const JA=(window.__SF_BASE_PATH||"")+"/assets/')
+        .replace(
+          /https:\/\/star-follower\.netlify\.app`;window\.open\(`https:\/\/wa\.me\/\?text=\$\{encodeURIComponent\(q\)\}`,"_blank"\)/,
+          'https://star-follower.github.io/Official/`;if(typeof navigator.share==="function"){navigator.share({title:"Star Follower",text:q}).catch(()=>{})}else{window.open(`https://wa.me/?text=${encodeURIComponent(q)}`,"_blank")}'
+        )
+        .replace(' WhatsApp पर शेयर करें', ' दोस्तों के साथ शेयर करें')
+        .replace(
+          'N=async E=>{E.preventDefault();const A=h.trim();if(A){b(!0)',
+          'N=async E=>{E.preventDefault();const A=h.trim();if(!/^[A-Za-z0-9]{6}$/.test(A)){S({variant:"destructive",title:"कृपया 6-अंकीय Recovery Code डालें!"});return}if(A){b(!0)'
+        )
+        .replace(
+          'placeholder:"6-digit Recovery Code",value:h,onChange:E=>p(E.target.value.replace(/\\D/g,"").slice(0,6)),className:"bg-card/50 border-primary/20 focus-visible:ring-primary h-14 text-center tracking-[0.5em] text-xl font-mono",inputMode:"numeric",maxLength:6,autoFocus:!0}',
+          'placeholder:"6-character Recovery Code",value:h,onChange:E=>p(E.target.value.replace(/[^a-zA-Z0-9]/g,"").toUpperCase().slice(0,6)),className:"bg-card/50 border-primary/20 focus-visible:ring-primary h-14 text-center tracking-[0.5em] text-xl font-mono",type:"text",maxLength:6,autoFocus:!0}'
+        )
         .replace(
           'https://star-follower.netlify.app',
           'https://star-follower.github.io/Official/'
