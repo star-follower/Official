@@ -103,10 +103,10 @@
   }
 
   async function handleRecover(body) {
-    var recoveryCode = String(body.recoveryCode || '').replace(/\D/g, '');
-    if (!/^\d{10}$/.test(recoveryCode)) {
+    var recoveryCode = String(body.recoveryCode || '').replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+    if (!/^[A-Z0-9]{6}$/.test(recoveryCode)) {
       return jsonRes({
-        error: 'Recovery Code must contain exactly 10 digits.'
+        error: 'कृपया 6-अंकीय Recovery Code डालें!'
       }, 400);
     }
     var res = await db.rpc('sf_recover', {

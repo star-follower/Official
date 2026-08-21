@@ -266,13 +266,13 @@
     existing.style.color = isError ? '#f87171' : '#4ade80';
   }
 
-  function submitTenDigitRecovery(form, input, button) {
-    var code = String(input.value || '').replace(/\D/g, '').trim();
-    if (code.length > 10) code = code.slice(0, 10);
+  function submitRecovery(form, input, button) {
+    var code = String(input.value || '').replace(/[^a-zA-Z0-9]/g, '').toUpperCase().trim();
+    if (code.length > 6) code = code.slice(0, 6);
     input.value = code;
 
-    if (!/^\d{10}$/.test(code)) {
-      showRecoveryMessage('कृपया 10 अंकों का Recovery Code डालें।', true);
+    if (!/^[A-Z0-9]{6}$/.test(code)) {
+      showRecoveryMessage('कृपया 6-अंकीय Recovery Code डालें!', true);
       return;
     }
 
@@ -318,19 +318,19 @@
     var node;
     while ((node = walker.nextNode())) {
       if (node.nodeValue.indexOf('6-अंकीय') !== -1) {
-        node.nodeValue = node.nodeValue.replace(/6-अंकीय/g, '10-अंकीय');
+        node.nodeValue = node.nodeValue.replace(/6-अंकीय/g, '6-अंकीय');
       }
       if (node.nodeValue.indexOf('6-digit Recovery Code') !== -1) {
-        node.nodeValue = node.nodeValue.replace(/6-digit Recovery Code/g, '10-digit Recovery Code');
+        node.nodeValue = node.nodeValue.replace(/6-digit Recovery Code/g, '6-character Recovery Code');
       }
     }
 
-    input.placeholder = '10-अंकीय Recovery Code';
+    input.placeholder = '6-अंकीय Recovery Code';
     input.removeAttribute('maxlength');
-    input.setAttribute('maxlength', '10');
-    input.maxLength = 10;
-    input.setAttribute('aria-label', '10-अंकीय Recovery Code');
-    input.setAttribute('inputmode', 'numeric');
+    input.setAttribute('maxlength', '6');
+    input.maxLength = 6;
+    input.setAttribute('aria-label', '6-अंकीय Recovery Code');
+    input.removeAttribute('inputmode');
     input.setAttribute('type', 'text');
     input.setAttribute('autocomplete', 'one-time-code');
     input.removeAttribute('pattern');
@@ -350,10 +350,10 @@
 
       input.addEventListener('input', function (event) {
         event.stopImmediatePropagation();
-        var value = String(input.value || '').replace(/\D/g, '');
-        if (value.length > 10) value = value.slice(0, 10);
+        var value = String(input.value || '').replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+        if (value.length > 6) value = value.slice(0, 6);
         if (input.value !== value) input.value = value;
-        if (button) button.disabled = value.length !== 10;
+        if (button) button.disabled = value.length !== 6;
       }, true);
 
       input.addEventListener('invalid', function (event) {
@@ -364,13 +364,13 @@
       form.addEventListener('submit', function (event) {
         event.preventDefault();
         event.stopImmediatePropagation();
-        submitTenDigitRecovery(form, input, button);
+        submitRecovery(form, input, button);
       }, true);
     }
 
     recoveryForm = form;
     if (button) {
-      button.disabled = input.value.length !== 10;
+      button.disabled = input.value.length !== 6;
     }
   }
 
@@ -413,6 +413,50 @@
     if (matches.length > 1) matches[1].nodeValue = 'Instagram Reel Save';
   }
 
+  function normalizeServiceDeliveryTimes() {
+    if (getAppRoutePath() !== '/services') return;
+    var main = document.querySelector('#root main');
+    if (!main) return;
+
+    var targetText = 'Delivery Time: 0 to 1 Hour (0 मिनट से 1 घंटे के भीतर पूरा हो जाता है।)';
+    var serviceNames = [
+      'Instagram Followers',
+      'Instagram Repost',
+      'Instagram Reel Share',
+      'Instagram Likes',
+      'Instagram Reel Views',
+      'Instagram Post Views',
+      'Instagram Saves',
+      'Instagram Reel Save'
+    ];
+    var containers = main.querySelectorAll('div');
+
+    for (var i = 0; i < containers.length; i++) {
+      var container = containers[i];
+      var containerText = container.textContent || '';
+      if (containerText.indexOf('Delivery Time:') === -1) continue;
+      if (containerText.indexOf('Instagram Story Views') !== -1 ||
+          containerText.indexOf('Instagram Comments') !== -1) continue;
+
+      var isTargetService = false;
+      for (var j = 0; j < serviceNames.length; j++) {
+        if (containerText.indexOf(serviceNames[j]) !== -1) {
+          isTargetService = true;
+          break;
+        }
+      }
+      if (!isTargetService) continue;
+
+      var walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT);
+      var node;
+      while ((node = walker.nextNode())) {
+        if (node.nodeValue.indexOf('Delivery Time:') !== -1) {
+          node.nodeValue = targetText;
+        }
+      }
+    }
+  }
+
   function refreshPageEnhancements() {
     updateRouteClasses();
     document.body.classList.toggle(
@@ -427,6 +471,7 @@
     removeEmbeddedTutorialPlayers();
     patchRecoveryForm();
     renameDuplicateService();
+    normalizeServiceDeliveryTimes();
     ensureHomeVideoCard();
   }
 
