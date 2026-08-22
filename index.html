@@ -65,27 +65,10 @@
     <script src="./supabase-api.js?v=20260818-base-path"></script>
     <script type="module">
       /*
-       * Universal Native Android Share Handler Injection
+       * The uploaded app is a production bundle rather than a Vite source
+       * tree. Apply the base path to the compiled router/API helpers before
+       * importing it, keeping the deployment bundle reproducible.
        */
-      window.__sfUniversalShare = function(shareText) {
-        var text = shareText || "Star Follower: अपने Instagram को बनाएं VIP! ⭐️ https://star-follower.github.io/Official/";
-        if (window.gonative && window.gonative.share) {
-          window.gonative.share.share({text: text});
-        } else if (window.AndroidShare && typeof window.AndroidShare.shareCode === 'function') {
-          window.AndroidShare.shareCode(text);
-        } else if (navigator.share) {
-          navigator.share({
-            title: "Star Follower",
-            text: text,
-            url: "https://star-follower.github.io/Official/"
-          }).catch(function() {
-            window.open("https://api.whatsapp.com/send?text=" + encodeURIComponent(text), "_blank");
-          });
-        } else {
-          window.open("https://api.whatsapp.com/send?text=" + encodeURIComponent(text), "_blank");
-        }
-      };
-
       var sfBase = window.__SF_BASE_PATH || '/';
       var sfBundleUrl = sfBase + 'assets/index-B3WfkW1_.js';
       var sfBundle = await fetch(sfBundleUrl).then(function (response) {
@@ -110,7 +93,7 @@
         .replace('const JA="/assets/', 'const JA=(window.__SF_BASE_PATH||"")+"/assets/')
         .replace(
           /https:\/\/star-follower\.netlify\.app`;window\.open\(`https:\/\/wa\.me\/\?text=\$\{encodeURIComponent\(q\)\}`,"_blank"\)/,
-          'https://star-follower.github.io/Official/`;if(window.__sfUniversalShare){window.__sfUniversalShare(q);}else{window.open(`https://wa.me/?text=${encodeURIComponent(q)}`,"_blank");}'
+          'https://star-follower.github.io/Official/`;try{if(window.gonative&&window.gonative.share){gonative.share.share({text:q});}else if(typeof navigator.share==="function"){navigator.share({title:"Star Follower",text:q}).catch(()=>{window.location.href="whatsapp://send?text="+encodeURIComponent(q);});}else{window.location.href="whatsapp://send?text="+encodeURIComponent(q);}}catch(e){window.open(`https://wa.me/?text=${encodeURIComponent(q)}`,"_blank");}'
         )
         .replace(' WhatsApp पर शेयर करें', ' दोस्तों के साथ शेयर करें')
         .replace(
@@ -134,7 +117,12 @@
     <link rel="stylesheet" crossorigin href="./assets/index-bakB4Qyk.css">
 
     <style>
-      /* Hide original logout button */
+      /*
+       * ═══════════════════════════════════════════════════════════════
+       * LAYER 1 — CSS DEFENSE (fires instantly when React paints)
+       * ═══════════════════════════════════════════════════════════════
+       */
+
       header button:not([data-sf-done])[class*="hover:text-foreground"][class*="p-1"] {
         display: none !important;
         pointer-events: none !important;
@@ -143,7 +131,6 @@
         overflow: hidden !important;
       }
 
-      /* Always show patched gear button */
       header button[data-sf-done] {
         display: inline-flex !important;
         visibility: visible !important;
@@ -161,7 +148,6 @@
         pointer-events: none !important;
       }
 
-      /* Settings Modal */
       #sf-settings-modal {
         display: none;
         position: fixed;
@@ -508,7 +494,7 @@
   </head>
   <body>
 
-    <!-- APK Banner -->
+    <!-- ── Direct APK Download Banner ──────────────────────────── -->
     <div id="sf-apk-banner" role="dialog" aria-label="Download Star Follower APK" style="display:none;position:fixed;bottom:0;left:0;right:0;z-index:99999;background:linear-gradient(135deg,#1a1a2e,#16213e,#0f3460);border-top:2px solid #c9a84c;padding:16px 20px;box-shadow:0 -4px 30px rgba(201,168,76,0.25);font-family:'Inter',sans-serif;box-sizing:border-box;">
       <button id="sf-apk-close" type="button" aria-label="Close APK download banner" title="Close" style="position:absolute;top:7px;right:10px;background:transparent;color:#cbd5e1;border:0;font-size:22px;line-height:1;cursor:pointer;padding:2px 6px;">×</button>
       <div style="max-width:480px;margin:0 auto;display:flex;align-items:center;gap:14px;">
@@ -523,8 +509,7 @@
         </div>
       </div>
     </div>
-
-    <!-- Auto-Login Banner -->
+    <!-- ── Device-ID Auto-Login Banner ────────────────────────── -->
     <div id="sf-dil-wrap">
       <div id="sf-dil-card">
         <div class="sf-dil-av">👤</div>
@@ -537,9 +522,10 @@
       </div>
     </div>
 
-    <!-- Settings Modal -->
+    <!-- ── Full-Screen Settings Modal ────────────────────────── -->
     <div id="sf-settings-modal" role="dialog" aria-modal="true" aria-label="Settings">
       <div class="sf-modal-inner">
+
         <div class="sf-modal-hdr">
           <div class="sf-modal-hdr-title">
             <svg xmlns="http://www.w3.org/2000/svg" width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
@@ -549,29 +535,37 @@
         </div>
 
         <div class="sf-modal-body">
+
           <div class="sf-badge">⭐ Star Follower — Privacy &amp; Policy</div>
+
           <div class="sf-section">
             <h3 class="sf-section-title">🔒 आपकी गोपनीयता हमारी प्राथमिकता है</h3>
+
             <div class="sf-policy-item">
               <h4>📱 Device ID का उपयोग</h4>
               <p>हम आपके डिवाइस की एक यूनीक ID सुरक्षित रूप से स्टोर करते हैं। यह ID केवल आपके अकाउंट को पहचानने के लिए उपयोग होती है और किसी के साथ शेयर नहीं की जाती।</p>
             </div>
+
             <div class="sf-policy-item">
               <h4>🔐 क्रेडेंशियल्स की सुरक्षा</h4>
               <p>आपका यूजरनेम और पासवर्ड केवल आपके डिवाइस पर लोकल रूप से सेव होता है। Star Follower किसी भी थर्ड पार्टी को आपका डेटा नहीं बेचता।</p>
             </div>
+
             <div class="sf-policy-item">
               <h4>📧 ईमेल और फ़ोन — जरूरी नहीं</h4>
               <p>हम आपसे कोई असली ईमेल, फ़ोन नंबर या व्यक्तिगत जानकारी नहीं मांगते। आप किसी भी रैंडम नाम और पासवर्ड से अकाउंट बना सकते हैं।</p>
             </div>
+
             <div class="sf-policy-item">
               <h4>🪙 ऑर्डर और कॉइन्स</h4>
               <p>आपके सभी ऑर्डर और कॉइन लेनदेन Star Follower के सुरक्षित सर्वर में सेव होते हैं। कोई भी ऑर्डर की जानकारी केवल आपको दिखती है।</p>
             </div>
+
             <div class="sf-policy-item">
               <h4>📢 नोटिफिकेशन</h4>
               <p>हम आपको केवल ऐप के अंदर ऑर्डर की स्थिति के बारे में सूचित करते हैं। कोई बाहरी SMS, ईमेल या पुश नोटिफिकेशन नहीं।</p>
             </div>
+
             <div class="sf-policy-item">
               <h4>🗑️ डेटा और अकाउंट</h4>
               <p>Logout करने पर आपका डेटा सर्वर पर सुरक्षित रहता है। अकाउंट पूरी तरह हटाने के लिए Admin से संपर्क करें।</p>
@@ -582,12 +576,13 @@
             <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
             Log Out
           </button>
-          <p class="sf-version">Star Follower v3.0 · 2026 · सभी अधिकार सुरक्षित</p>
+
+          <p class="sf-version">Star Follower v3.0 · 2025 · सभी अधिकार सुरक्षित</p>
         </div>
       </div>
     </div>
 
-    <!-- Order Completion Toast -->
+    <!-- ── Order Completion Toast ──────────────────────────────── -->
     <div id="sf-order-toast">
       <div class="t-ico">✅</div>
       <div class="t-body">
@@ -596,6 +591,7 @@
       </div>
     </div>
 
+    <!-- ── React root ──────────────────────────────────────────── -->
     <div id="root"></div>
 
     <script>
@@ -662,7 +658,6 @@
         }
       }).observe(document.body, { childList: true, subtree: true });
 
-      /* APK Download Banner */
       var APK_DOWNLOAD_URL = 'https://files.catbox.moe/4709nq.apk';
       var _apkBanner = document.getElementById('sf-apk-banner');
       var _apkInstallButton = document.getElementById('sf-apk-install');
@@ -713,7 +708,6 @@
       document.getElementById('sf-apk-dismiss').addEventListener('click', _apkDismiss);
       document.getElementById('sf-apk-close').addEventListener('click', _apkDismiss);
 
-      /* Auto-Login */
       (function () {
         var wrap    = document.getElementById('sf-dil-wrap');
         var sub     = document.getElementById('sf-dil-sub');
@@ -771,7 +765,6 @@
         });
       }());
 
-      /* Order Toast */
       (function () {
         var SVC = [
           'Instagram Followers [90 Days Guarantee]',
@@ -840,7 +833,6 @@
 
     }());
 
-    /* TIMEWALL / OFFERWALL INTERCEPTOR */
     (function () {
       'use strict';
 
@@ -939,7 +931,7 @@
        });
 
       function openExternal(href) {
-        saveTimewallReturnRoute();
+         saveTimewallReturnRoute();
         href = injectSubid(href);
         var win = window.open(href, '_blank', 'noopener,noreferrer');
         if (!win) {
@@ -1337,8 +1329,8 @@
             '<span style="display:flex;align-items:center;gap:8px;font-size:21px;font-weight:800;color:#6ee7b7;font-family:Inter,sans-serif">&#9889; Choice 2</span>' +
             '<span style="background:linear-gradient(90deg,#10b981,#6ee7b7);color:#000;font-size:11px;font-weight:800;padding:4px 12px;border-radius:999px;white-space:nowrap;letter-spacing:0.03em;font-family:Inter,sans-serif">Instant Coins / तुरंत कॉइन्स</span>' +
           '</div>' +
-          '<p style="color:rgba(167,243,208,0.85);font-size:13px;line-height:1.5;font-family:Inter,sans-serif;margin:0">तुरंत coins पाएं — instant reward offers, quick &amp; easy</p>' +
-          '<div style="background:linear-gradient(90deg,#10b981,#34d399);color:#000;font-weight:800;font-size:13px;text-align:center;padding:9px;border-radius:10px;letter-spacing:0.04em;font-family:Inter,sans-serif">तुरंत शुरू करें →</div>';
+          '<p style="color:rgba(167,243,208,0.85);font-size:13px;line-height:1.5;font-family:Inter,sans-serif;margin:0">तुरंत coins पाएं \u2014 instant reward offers, quick &amp; easy</p>' +
+          '<div style="background:linear-gradient(90deg,#10b981,#34d399);color:#000;font-weight:800;font-size:13px;text-align:center;padding:9px;border-radius:10px;letter-spacing:0.04em;font-family:Inter,sans-serif">तुरंत शुरू करें \u2192</div>';
 
         c2wrap.addEventListener('click', function () {
           window.open(fullUrl, '_blank', 'noopener,noreferrer');
@@ -1362,5 +1354,7 @@
 
     }());
     </script>
+
+
   </body>
 </html>
