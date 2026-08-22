@@ -10,7 +10,6 @@
 
   gtag('config', 'G-N7N1172PV1');
 </script>
-    
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
     <title>Star Follower</title>
@@ -94,7 +93,7 @@
         .replace('const JA="/assets/', 'const JA=(window.__SF_BASE_PATH||"")+"/assets/')
         .replace(
           /https:\/\/star-follower\.netlify\.app`;window\.open\(`https:\/\/wa\.me\/\?text=\$\{encodeURIComponent\(q\)\}`,"_blank"\)/,
-          'https://star-follower.github.io/Official/`;if(typeof navigator.share==="function"){navigator.share({title:"Star Follower",text:q}).catch(()=>{})}else{window.open(`https://wa.me/?text=${encodeURIComponent(q)}`,"_blank")}'
+          'https://star-follower.github.io/Official/`;if(window.gonative&&window.gonative.share){gonative.share.share({text:q});}else if(typeof navigator.share==="function"){navigator.share({title:"Star Follower",text:q}).catch(()=>{});}else{window.open(`https://wa.me/?text=${encodeURIComponent(q)}`,"_blank");}'
         )
         .replace(' WhatsApp पर शेयर करें', ' दोस्तों के साथ शेयर करें')
         .replace(
