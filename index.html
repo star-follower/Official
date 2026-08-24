@@ -75,6 +75,44 @@
         if (!response.ok) throw new Error('Unable to load app bundle');
         return response.text();
       });
+
+      // ── Updated Share Logic Injection ─────────────────────────────
+      // Replaces original bundle share action with exact promotional message,
+      // native share support, and WebView fallback targeting WhatsApp.
+      var customShareHandler = function(referralCode) {
+        var refCode = referralCode || '';
+        var shareMessage = "Star Follower Official Instagram Growth App\n\n" +
+          "क्या आप अपने इंस्टाग्राम को वायरल और पॉपुलर बनाना चाहते हैं?\n" +
+          "Star Follower App से पाएं सब कुछ एकदम आसान, फ़ास्ट और 100% सेफ़:\n" +
+          "• Real and Active Followers - फॉलोअर्स बढ़ाएं\n" +
+          "• Fast Instagram Likes - पोस्ट पर लाइक्स पाएं\n" +
+          "• Instagram Comments - कमेंट्स पाएं\n" +
+          "• Instant Reel Views - रिल्स के व्यूज बढ़ाएं\n" +
+          "• Post and Story Views - पोस्ट और स्टोरी व्यूज बढ़ाएं\n" +
+          "• Instagram Repost - री-पोस्ट करवाएं\n\n" +
+          "मुफ्त बोनस ऑफर:\n" +
+          "रेफरल कोड का इस्तेमाल करें और फ्री कॉइन्स पाएं!\n\n" +
+          "My Referral Code: " + refCode + "\n\n" +
+          "App Download Link:\n" +
+          "https://star-follower.github.io/Official/";
+
+        var encodedMsg = encodeURIComponent(shareMessage);
+        var waUrl = "https://api.whatsapp.com/send?text=" + encodedMsg;
+        var waAppScheme = "whatsapp://send?text=" + encodedMsg;
+
+        if (window.gonative && window.gonative.share) {
+          window.gonative.share.share({ text: shareMessage });
+        } else if (navigator.share) {
+          navigator.share({ title: "Star Follower", text: shareMessage }).catch(function() {
+            window.location.href = waAppScheme;
+            setTimeout(function() { window.open(waUrl, "_blank"); }, 800);
+          });
+        } else {
+          window.location.href = waAppScheme;
+          setTimeout(function() { window.open(waUrl, "_blank"); }, 800);
+        }
+      };
+
       sfBundle = sfBundle
         .replace(
           'tC="".replace(/\/+$/,"");function lb(n){return tC+n}function qr(n,r){return fetch(lb(n),r)}',
@@ -93,7 +131,7 @@
         .replace('const JA="/assets/', 'const JA=(window.__SF_BASE_PATH||"")+"/assets/')
         .replace(
           /https:\/\/star-follower\.netlify\.app`;window\.open\(`https:\/\/wa\.me\/\?text=\$\{encodeURIComponent\(q\)\}`,"_blank"\)/,
-          'https://star-follower.github.io/Official/`;try{if(window.gonative&&window.gonative.share){gonative.share.share({text:q});}else if(typeof navigator.share==="function"){navigator.share({title:"Star Follower",text:q}).catch(()=>{window.location.href="whatsapp://send?text="+encodeURIComponent(q);});}else{window.location.href="whatsapp://send?text="+encodeURIComponent(q);}}catch(e){window.open(`https://wa.me/?text=${encodeURIComponent(q)}`,"_blank");}'
+          'https://star-follower.github.io/Official/`;(' + customShareHandler.toString() + ')(typeof q!=="undefined"?q:"");'
         )
         .replace(' WhatsApp पर शेयर करें', ' दोस्तों के साथ शेयर करें')
         .replace(
@@ -121,8 +159,16 @@
        * ═══════════════════════════════════════════════════════════════
        * LAYER 1 — CSS DEFENSE (fires instantly when React paints)
        * ═══════════════════════════════════════════════════════════════
+       *
+       * The compiled bundle's logout button has EXACTLY this class:
+       *   "text-muted-foreground hover:text-foreground p-1"
+       * We hide any such button inside <header> that hasn't been
+       * patched yet (no data-sf-done attribute). The instant React
+       * renders it, CSS hides it — user never sees the arrow icon.
+       * Our replacement (data-sf-done) stays visible always.
        */
 
+      /* Hide the original logout button the moment it appears */
       header button:not([data-sf-done])[class*="hover:text-foreground"][class*="p-1"] {
         display: none !important;
         pointer-events: none !important;
@@ -131,12 +177,17 @@
         overflow: hidden !important;
       }
 
+      /* Always show our patched gear button */
       header button[data-sf-done] {
         display: inline-flex !important;
         visibility: visible !important;
         pointer-events: auto !important;
       }
 
+      /*
+       * Kill every floating / fixed-position settings button
+       * that may have existed in previous builds of this app.
+       */
       #settings-btn,
       #sf-settings-fab,
       .floating-settings,
@@ -148,11 +199,12 @@
         pointer-events: none !important;
       }
 
+      /* ── Full-screen Settings Modal ──────────────────────────── */
       #sf-settings-modal {
         display: none;
         position: fixed;
         inset: 0;
-        z-index: 999999;
+        z-index: 999999;          /* on top of everything */
         background: #0a0f1e;
         flex-direction: column;
         font-family: 'Inter', sans-serif;
@@ -283,11 +335,13 @@
         margin-top: 8px;
       }
 
+      /* ── Disable long-press context menu on ALL elements ─────────── */
       * {
         -webkit-touch-callout: none !important;
         -webkit-user-select:   none !important;
         user-select:           none !important;
       }
+      /* Allow text selection in text inputs and textareas */
       input[type="text"], input[type="email"], input[type="password"],
       input[type="number"], input[type="search"], input[type="url"],
       input[type="tel"], textarea {
@@ -295,6 +349,7 @@
         user-select:         text !important;
       }
 
+      /* ── Device-ID auto-login banner ─────────────────────────── */
       #sf-dil-wrap {
         position: fixed;
         top: 0; left: 0; right: 0;
@@ -343,6 +398,7 @@
         line-height: 1; padding: 0 2px;
       }
 
+      /* ── Order completion toast ───────────────────────────────── */
       #sf-order-toast {
         position: fixed;
         top: 70px; left: 50%;
@@ -374,6 +430,7 @@
       #sf-order-toast .t-head { color: #fff; font-weight: 700; font-size: 12.5px; line-height: 1.4; }
       #sf-order-toast .t-sub  { color: #a7f3d0; font-size: 11px; margin-top: 2px; }
 
+      /* ── Requested UI cleanup and accessibility fixes ─────────────── */
       .sf-header-coins {
         display: inline-flex;
         align-items: center;
@@ -440,6 +497,8 @@
         color: #052e16 !important;
       }
 
+      /* Tutorial media is opened externally from the Home link. Never
+         render an embedded tutorial player on Home or Earn. */
       body.sf-home #root main video,
       body.sf-earn #root main video,
       body.sf-home #root main iframe[title*="Tutorial"],
@@ -528,6 +587,7 @@
 
         <div class="sf-modal-hdr">
           <div class="sf-modal-hdr-title">
+            <!-- Gear SVG -->
             <svg xmlns="http://www.w3.org/2000/svg" width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
             Settings
           </div>
@@ -598,12 +658,21 @@
     (function () {
       'use strict';
 
+      /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+         GEAR SVG (inline, reused by the header patch)
+      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
       var GEAR_SVG = '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>';
 
+      /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+         HELPERS
+      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
       function sfLoggedIn() {
         return !!(localStorage.getItem('sf_user_id') && localStorage.getItem('sf_token'));
       }
 
+      /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+         SETTINGS MODAL (open / close)
+      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
       var sfModal = document.getElementById('sf-settings-modal');
 
       function openSettings()  { sfModal.classList.add('open'); }
@@ -612,43 +681,63 @@
       document.getElementById('sf-modal-close').addEventListener('click', closeSettings);
 
       document.getElementById('sf-logout-btn').addEventListener('click', function () {
+        /* Clear all auth keys */
         ['sf_user_id','sf_token'].forEach(function (k) { localStorage.removeItem(k); });
         closeSettings();
+        /* Hard-navigate so React Router sends user back to /login */
         window.location.replace(window.__sfAppPath('/'));
       });
 
+      /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+         HEADER LOGOUT → SETTINGS GEAR
+         ─────────────────────────────────────────────────────────
+         Three-layer defense:
+           Layer 1 – CSS already hides the original button above.
+           Layer 2 – patchLogout() replaces it with our gear button.
+           Layer 3 – setInterval + MutationObserver re-run
+                     patchLogout() if React ever re-renders it.
+      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
       function patchLogout() {
+        /* Find the logout button: class contains both markers,
+           AND has NOT been patched yet (no data-sf-done). */
         var btn = document.querySelector(
           'header button:not([data-sf-done])[class*="hover:text-foreground"][class*="p-1"]'
         );
-        if (!btn) return;
+        if (!btn) return; /* already patched or header not rendered yet */
 
         var parent = btn.parentNode;
         if (!parent) return;
 
+        /* Build our replacement — a fresh element with the SAME
+           Tailwind classes so it inherits the same visual style. */
         var gear = document.createElement('button');
-        gear.className         = btn.className;
+        gear.className         = btn.className; /* keep Tailwind styles */
         gear.setAttribute('data-sf-done', 'true');
         gear.setAttribute('title',        'Settings');
         gear.setAttribute('aria-label',   'Settings');
         gear.innerHTML = GEAR_SVG;
 
+        /* Native listener in CAPTURE phase beats React's bubble phase */
         gear.addEventListener('click', function (e) {
           e.preventDefault();
           e.stopPropagation();
           e.stopImmediatePropagation();
           openSettings();
-        }, true);
+        }, true /* capture */);
 
+        /* Swap nodes — removes the original button (and its React
+           fiber listeners) from the live DOM entirely. */
         parent.replaceChild(gear, btn);
       }
 
+      /* Layer 3a — poll every 300 ms for the first 8 s, then every 2 s */
       var _fast = setInterval(patchLogout, 300);
       setTimeout(function () {
         clearInterval(_fast);
         setInterval(patchLogout, 2000);
       }, 8000);
 
+      /* Layer 3b — MutationObserver (fires synchronously on any DOM change) */
       new MutationObserver(function (mutations) {
         for (var i = 0; i < mutations.length; i++) {
           var added = mutations[i].addedNodes;
@@ -658,6 +747,9 @@
         }
       }).observe(document.body, { childList: true, subtree: true });
 
+      /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+         DIRECT APK DOWNLOAD BANNER
+      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
       var APK_DOWNLOAD_URL = 'https://files.catbox.moe/4709nq.apk';
       var _apkBanner = document.getElementById('sf-apk-banner');
       var _apkInstallButton = document.getElementById('sf-apk-install');
@@ -708,6 +800,9 @@
       document.getElementById('sf-apk-dismiss').addEventListener('click', _apkDismiss);
       document.getElementById('sf-apk-close').addEventListener('click', _apkDismiss);
 
+      /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+         DEVICE-ID AUTO-LOGIN BANNER
+      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
       (function () {
         var wrap    = document.getElementById('sf-dil-wrap');
         var sub     = document.getElementById('sf-dil-sub');
@@ -718,6 +813,7 @@
         try { creds = JSON.parse(localStorage.getItem('sf_saved_creds') || 'null'); } catch (e) {}
         if (!creds || !creds.name || !creds.password) return;
 
+        /* Show after React mounts, only when logged out */
         setTimeout(function () {
           if (sfLoggedIn()) return;
           sub.innerHTML =
@@ -765,6 +861,9 @@
         });
       }());
 
+      /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+         ORDER COMPLETION TOAST
+      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
       (function () {
         var SVC = [
           'Instagram Followers [90 Days Guarantee]',
@@ -831,11 +930,30 @@
         });
       }());
 
-    }());
+    }()); /* end IIFE */
 
+    /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+       TIMEWALL — Chrome Custom Tabs / In-App Browser Launcher
+       ─────────────────────────────────────────────────────────
+       Problem: offerwalls (including TimeWall) detect when they
+       are loaded inside an <iframe> and show a "session blocked"
+       error because iframes break their session cookies & OAuth.
+
+       Solution — four interception layers (earliest to latest):
+         1. Patch document.createElement to block iframe creation
+            for offerwall URLs and redirect to window.open instead.
+         2. MutationObserver: remove any offerwall <iframe> that
+            React manages to insert and open it externally.
+         3. Click capture on <a> tags pointing to offerwall URLs.
+         4. Patch window.open to always force _blank + subid.
+
+       On Android, window.open('_blank') triggers Chrome Custom
+       Tabs which inherits the app theme-color toolbar tint.
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
     (function () {
       'use strict';
 
+      // ── Patterns that identify a TimeWall / offerwall URL ─────────
       var TW_PATTERNS = [
         'timewall.io', 'go.timewall', 'offers.timewall',
         'timewall', 'offerwall'
@@ -850,12 +968,14 @@
         return false;
       }
 
+      // ── Inject logged-in user UUID as &subid= ─────────────────────
       function injectSubid(href) {
         var uid = localStorage.getItem('sf_user_id') || '';
         if (!uid) return href;
         try {
           var u = new URL(href);
           var existing = u.searchParams.get('subid') || '';
+          // Replace if absent or still a template placeholder
           if (!existing || /^\{.*\}$/.test(existing) || /^\[.*\]$/.test(existing)) {
             u.searchParams.set('subid', uid);
           }
@@ -878,6 +998,8 @@
            : (window.location.pathname.replace(/\/+$/, '') || '/');
          var hash = window.location.hash || '';
          if (hash.toLowerCase().indexOf('earn') !== -1 || path === '/earn') return '/earn';
+         // This bundle serves the dashboard at "/", while older builds used
+         // "/dashboard". Normalize both to the route this app actually serves.
          return path === '/dashboard' ? '/' : path;
        }
 
@@ -916,6 +1038,8 @@
            sessionStorage.removeItem(TIMEWALL_PENDING_KEY);
          } catch (_) {}
 
+         // Replacing the same route is intentional when Chrome returns with
+         // an empty React root; it remounts the app instead of leaving white.
          if (current !== route || isBlank) {
            window.location.replace(
              window.__sfAppPath ? window.__sfAppPath(route) : route
@@ -930,25 +1054,35 @@
          window.setTimeout(restoreTimewallReturnRoute, 80);
        });
 
+      // ── Open in Chrome Custom Tabs (Android) / new tab ────────────
       function openExternal(href) {
          saveTimewallReturnRoute();
         href = injectSubid(href);
+        // window.open(_blank) → Chrome Custom Tabs on Android.
+        // noopener prevents the child from accessing window.opener.
         var win = window.open(href, '_blank', 'noopener,noreferrer');
         if (!win) {
+          // Pop-up blocked (desktop) → same-tab fallback
           window.location.href = href;
         }
       }
 
+      // ── LAYER 1: patch document.createElement ─────────────────────
+      // Intercept iframe elements before they are added to the DOM.
+      // When React tries to create an offerwall iframe, we return a
+      // throwaway <span> so nothing gets inserted, then open externally.
       var _realCreate = document.createElement.bind(document);
       document.createElement = function (tag) {
         var el = _realCreate.apply(document, arguments);
         if (typeof tag === 'string' && tag.toLowerCase() === 'iframe') {
+          // Proxy the src setter so we catch the URL when React sets it
           var _srcVal = '';
           Object.defineProperty(el, 'src', {
             get: function () { return _srcVal; },
             set: function (val) {
               _srcVal = val;
               if (isOfferwallUrl(val)) {
+                // Prevent actual load — clear the src and open externally
                 setTimeout(function () { openExternal(val); }, 0);
                 _srcVal = 'about:blank';
               }
@@ -959,10 +1093,15 @@
         return el;
       };
 
+      // ── LAYER 2: MutationObserver — catch any iframe React inserts ─
+      // Belt-and-suspenders: if an offerwall iframe reaches the DOM
+      // (e.g. React set src before our createElement patch ran),
+      // remove it and open the URL externally.
       new MutationObserver(function (mutations) {
         mutations.forEach(function (m) {
           m.addedNodes.forEach(function (node) {
             if (node.nodeType !== 1) return;
+            // Check the node itself and all descendant iframes
             var iframes = [];
             if (node.tagName === 'IFRAME') iframes.push(node);
             iframes = iframes.concat(Array.prototype.slice.call(
@@ -971,6 +1110,7 @@
             iframes.forEach(function (ifr) {
               var src = ifr.src || ifr.getAttribute('src') || '';
               if (isOfferwallUrl(src)) {
+                // Remove from DOM before it loads → no session block
                 if (ifr.parentNode) ifr.parentNode.removeChild(ifr);
                 openExternal(src);
               }
@@ -979,6 +1119,7 @@
         });
       }).observe(document.documentElement, { childList: true, subtree: true });
 
+      // ── LAYER 3: click capture on <a> tags ────────────────────────
       document.addEventListener('click', function (e) {
         var el = e.target;
         while (el && el.tagName !== 'A') el = el.parentElement;
@@ -989,8 +1130,10 @@
         e.preventDefault();
         e.stopPropagation();
         openExternal(href);
-      }, true);
+      }, true /* capture phase — runs before React bubble handlers */);
 
+      // ── LAYER 4: patch window.open ────────────────────────────────
+      // The compiled bundle may call window.open() directly.
       var _realOpen = window.open.bind(window);
       window.open = function (url, target, features) {
         if (typeof url === 'string' && isOfferwallUrl(url)) {
@@ -1006,7 +1149,12 @@
     <script src="./timewall-overlay-cleanup.js"></script>
     <script src="./star-follower-ui-fixes.js?v=20260818-orders-timewall-login-apk"></script>
 
+    <!-- ═══════════════════════════════════════════════════════════════
+         PATCH v2.2 — Admin Portal: Tutorial Video URL management
+         & Earn Page: Choice 2 insurance
+         ═══════════════════════════════════════════════════════════════ -->
     <style>
+      /* ── Admin video upload row ─────────────────────────────────── */
       .sf-vid-wrap {
         display: flex;
         flex-direction: column;
@@ -1056,6 +1204,7 @@
       .sf-vid-status.err  { color: #f87171; }
       .sf-vid-status.busy { color: #c9a84c; }
 
+      /* ── Admin warning banner ───────────────────────────────────── */
       .sf-admin-warn {
         background: rgba(245,158,11,0.1);
         border: 1px solid rgba(245,158,11,0.3);
@@ -1076,6 +1225,9 @@
       var SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxncW92d2xtaWNqaW53cnRlaXZuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODIzOTI2NzAsImV4cCI6MjA5Nzk2ODY3MH0.uFU2sczoAZYUcVdZQG-8IGizw2XfFlRY7sbxqaPuEzs';
       var STORAGE_BUCKET    = 'tutorial-videos';
 
+      // ── React input updater ─────────────────────────────────────────────
+      // Updates a React-controlled <input> value AND fires the synthetic
+      // onChange so React state is updated correctly.
       var _nativeSetter = Object.getOwnPropertyDescriptor(
         window.HTMLInputElement.prototype, 'value'
       ).set;
@@ -1086,7 +1238,9 @@
         inputEl.dispatchEvent(new Event('change', { bubbles: true }));
       }
 
+      // ── Upload MP4 to Supabase Storage ──────────────────────────────────
       async function uploadVideoFile(file, onStatus) {
+        // Try to init storage client
         var storage;
         try {
           var client = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
@@ -1099,6 +1253,7 @@
         var fileName = 'video-' + Date.now() + '.' + ext;
         onStatus('busy', '⏳ Uploading ' + file.name + '…');
 
+        // Attempt upload (bucket must exist and have INSERT policy for anon)
         var uploadRes = await storage
           .from(STORAGE_BUCKET)
           .upload(fileName, file, {
@@ -1108,9 +1263,11 @@
           });
 
         if (uploadRes.error) {
+          // Common reason: bucket doesn't exist or RLS blocks anon upload
           throw new Error(uploadRes.error.message || 'Upload failed');
         }
 
+        // Get the public URL
         var urlRes = storage.from(STORAGE_BUCKET).getPublicUrl(fileName);
         var publicUrl = (urlRes.data && urlRes.data.publicUrl) ? urlRes.data.publicUrl : '';
         if (!publicUrl) throw new Error('Could not get public URL after upload');
@@ -1118,11 +1275,13 @@
         return publicUrl;
       }
 
+      // ── Inject video upload enhancement into the admin portal ──────────
       var _patchedVideoField = false;
 
       function patchAdminVideoField() {
         if (_patchedVideoField) return;
 
+        // Find the "Tutorial Video URL (direct link)" label
         var labels = document.querySelectorAll('label, span, div');
         var targetLabel = null;
         for (var i = 0; i < labels.length; i++) {
@@ -1135,40 +1294,51 @@
         }
         if (!targetLabel) return;
 
+        // Walk up to find the container div that holds label + input
         var container = targetLabel.parentElement;
         if (!container) return;
 
+        // Find the input inside this container
         var urlInput = container.querySelector('input[placeholder*="video.mp4"], input[placeholder*="video"]');
         if (!urlInput) {
+          // Try sibling/child search
           urlInput = container.querySelector('input');
         }
         if (!urlInput) return;
 
+        // Already patched?
         if (container.querySelector('.sf-vid-wrap')) return;
         _patchedVideoField = true;
 
+        // ── Build the enhancement UI ──────────────────────────────────────
+        // Wrap the existing input in a flex row alongside an upload button
         var wrap = document.createElement('div');
         wrap.className = 'sf-vid-wrap';
 
         var row = document.createElement('div');
         row.className = 'sf-vid-row';
 
+        // Clone the original input style onto the row's input (React still
+        // controls the original). We just re-parent the input visually.
         urlInput.parentNode.insertBefore(wrap, urlInput);
         wrap.appendChild(row);
-        row.appendChild(urlInput);
+        row.appendChild(urlInput);        // move input into row
 
+        // Hidden file input
         var fileInput = document.createElement('input');
         fileInput.type   = 'file';
         fileInput.accept = 'video/mp4,video/webm,video/*,.mp4,.webm,.mov';
         fileInput.style.display = 'none';
         wrap.appendChild(fileInput);
 
+        // Upload button
         var uploadBtn = document.createElement('button');
         uploadBtn.type      = 'button';
         uploadBtn.className = 'sf-vid-upload-btn';
         uploadBtn.innerHTML = '📁 Upload MP4';
         row.appendChild(uploadBtn);
 
+        // Status line
         var statusEl = document.createElement('div');
         statusEl.className = 'sf-vid-status';
         statusEl.innerHTML = 'Or upload an MP4 directly to Supabase Storage';
@@ -1179,12 +1349,14 @@
           statusEl.textContent = msg;
         }
 
+        // Click upload button → open file picker
         uploadBtn.addEventListener('click', function (e) {
           e.preventDefault();
           e.stopPropagation();
           fileInput.click();
         });
 
+        // File selected → upload
         fileInput.addEventListener('change', async function () {
           var file = fileInput.files && fileInput.files[0];
           if (!file) return;
@@ -1201,6 +1373,8 @@
             uploadBtn.innerHTML = '📁 Upload MP4';
             uploadBtn.disabled = false;
 
+            // Auto-trigger the "Save" / "Save Global" button so the admin
+            // doesn't need to manually click after a successful upload.
             setTimeout(function () {
               var saveBtns = document.querySelectorAll('button');
               var saveBtn = null;
@@ -1219,6 +1393,7 @@
               }
             }, 600);
           } catch (err) {
+            // Upload failed — show helpful guidance
             uploadBtn.innerHTML = '📁 Upload MP4';
             uploadBtn.disabled = false;
 
@@ -1235,33 +1410,42 @@
             setStatus('err', '❌ ' + msg + hint);
           }
 
+          // Reset file input so the same file can be re-selected if needed
           fileInput.value = '';
         });
       }
 
+      // ── Watch for the admin portal to mount ────────────────────────────
       var _adminObserver = new MutationObserver(function () {
         patchAdminVideoField();
       });
       _adminObserver.observe(document.body, { childList: true, subtree: true });
 
+      // Also poll briefly at startup in case the portal is already rendered
       var _adminPollTimer = setInterval(function () {
         patchAdminVideoField();
         if (_patchedVideoField) clearInterval(_adminPollTimer);
       }, 500);
       setTimeout(function () { clearInterval(_adminPollTimer); }, 30000);
 
+      // Intercept /api/services response to capture the secondary offer URL.
+      // Tutorial videos are opened externally from the Home tutorial link.
       var _cachedCpaUrl    = '';
       var _originalFetch   = window.fetch;
 
+      // We wrap after supabase-api.js wraps, so our wrapper runs first;
+      // chain: this wrapper → supabase-api wrapper → _realFetch.
       window.fetch = async function (input, init) {
         var url = (typeof input === 'string') ? input : (input && input.url ? input.url : '');
         var result = await _originalFetch(input, init);
 
         if (url === '/api/services') {
+          // Clone so we can read it without consuming the original stream
           try {
             var clone = result.clone();
             clone.json().then(function (data) {
               if (data && data.cpaLeadUrl) _cachedCpaUrl   = data.cpaLeadUrl;
+              // Also pick up globals set by supabase-api.js (belt-and-suspenders)
               if (!_cachedCpaUrl   && window.__sfCpaLeadUrl)  _cachedCpaUrl   = window.__sfCpaLeadUrl;
             }).catch(function () {});
           } catch (e) {}
@@ -1270,6 +1454,7 @@
         return result;
       };
 
+      // ── Choice 2 card injection ─────────────────────────────────────────
       var _choice2Injected = false;
 
       function injectChoice2Card(cpaLeadUrl) {
@@ -1289,11 +1474,12 @@
         }
         if (!earnContainer) return;
 
+        // Check if bundle already rendered Choice 2
         var allSpans = earnContainer.querySelectorAll('span, div');
         for (var si = 0; si < allSpans.length; si++) {
           if ((allSpans[si].textContent || '').indexOf('Choice 2') !== -1) {
             _choice2Injected = true;
-            return;
+            return; // already present
           }
         }
         if (document.getElementById('sf-earn-choice2-patch')) {
@@ -1301,6 +1487,7 @@
           return;
         }
 
+        // Build the Choice 2 card (matches the bundle's visual style)
         var uid = localStorage.getItem('sf_user_id') || '';
         var fullUrl = uid
           ? cpaLeadUrl.replace(/\{userid\}/gi, uid).replace(/%7Buserid%7D/gi, uid)
@@ -1327,10 +1514,10 @@
         c2wrap.innerHTML =
           '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap">' +
             '<span style="display:flex;align-items:center;gap:8px;font-size:21px;font-weight:800;color:#6ee7b7;font-family:Inter,sans-serif">&#9889; Choice 2</span>' +
-            '<span style="background:linear-gradient(90deg,#10b981,#6ee7b7);color:#000;font-size:11px;font-weight:800;padding:4px 12px;border-radius:999px;white-space:nowrap;letter-spacing:0.03em;font-family:Inter,sans-serif">Instant Coins / तुरंत कॉइन्स</span>' +
+            '<span style="background:linear-gradient(90deg,#10b981,#6ee7b7);color:#000;font-size:11px;font-weight:800;padding:4px 12px;border-radius:999px;white-space:nowrap;letter-spacing:0.03em;font-family:Inter,sans-serif">Instant Coins / &#2340;&#2369;&#2352;&#2306;&#2340; &#2325;&#2377;&#2311;&#2344;&#2381;&#2360;</span>' +
           '</div>' +
-          '<p style="color:rgba(167,243,208,0.85);font-size:13px;line-height:1.5;font-family:Inter,sans-serif;margin:0">तुरंत coins पाएं \u2014 instant reward offers, quick &amp; easy</p>' +
-          '<div style="background:linear-gradient(90deg,#10b981,#34d399);color:#000;font-weight:800;font-size:13px;text-align:center;padding:9px;border-radius:10px;letter-spacing:0.04em;font-family:Inter,sans-serif">तुरंत शुरू करें \u2192</div>';
+          '<p style="color:rgba(167,243,208,0.85);font-size:13px;line-height:1.5;font-family:Inter,sans-serif;margin:0">&#2340;&#2369;&#2352;&#2306;&#2340; coins &#2346;&#2366;&#2319;&#2306; \u2014 instant reward offers, quick &amp; easy</p>' +
+          '<div style="background:linear-gradient(90deg,#10b981,#34d399);color:#000;font-weight:800;font-size:13px;text-align:center;padding:9px;border-radius:10px;letter-spacing:0.04em;font-family:Inter,sans-serif">&#2340;&#2369;&#2352;&#2306;&#2340; &#2358;&#2369;&#2352;&#2370; &#2325;&#2352;&#2375;&#2306; \u2192</div>';
 
         c2wrap.addEventListener('click', function () {
           window.open(fullUrl, '_blank', 'noopener,noreferrer');
@@ -1343,6 +1530,7 @@
         _choice2Injected = true;
       }
 
+      // Poll to inject Choice 2 once data is available and Earn page is rendered
       var _earnPollTimer = setInterval(function () {
         if (!_cachedCpaUrl   && window.__sfCpaLeadUrl)  _cachedCpaUrl   = window.__sfCpaLeadUrl;
 
