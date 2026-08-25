@@ -63,6 +63,14 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
     <script src="./supabase-api.js?v=20260818-base-path"></script>
+
+    <!-- ═══════════════════════════════════════════════════════════════
+         ANDROID WEBVIEW / APK NATIVE SHARE — loaded before the app
+         bundle so window.__sfShare is available the moment the React
+         app calls into it. See full implementation further below.
+         ═══════════════════════════════════════════════════════════════ -->
+    <script src="./sf-webview-share.js?v=20260824-share-fix"></script>
+
     <script type="module">
       /*
        * The uploaded app is a production bundle rather than a Vite source
@@ -75,44 +83,6 @@
         if (!response.ok) throw new Error('Unable to load app bundle');
         return response.text();
       });
-
-      // ── Updated Share Logic Injection ─────────────────────────────
-      // Replaces original bundle share action with exact promotional message,
-      // native share support, and WebView fallback targeting WhatsApp.
-      var customShareHandler = function(referralCode) {
-        var refCode = referralCode || '';
-        var shareMessage = "Star Follower Official Instagram Growth App\n\n" +
-          "क्या आप अपने इंस्टाग्राम को वायरल और पॉपुलर बनाना चाहते हैं?\n" +
-          "Star Follower App से पाएं सब कुछ एकदम आसान, फ़ास्ट और 100% सेफ़:\n" +
-          "• Real and Active Followers - फॉलोअर्स बढ़ाएं\n" +
-          "• Fast Instagram Likes - पोस्ट पर लाइक्स पाएं\n" +
-          "• Instagram Comments - कमेंट्स पाएं\n" +
-          "• Instant Reel Views - रिल्स के व्यूज बढ़ाएं\n" +
-          "• Post and Story Views - पोस्ट और स्टोरी व्यूज बढ़ाएं\n" +
-          "• Instagram Repost - री-पोस्ट करवाएं\n\n" +
-          "मुफ्त बोनस ऑफर:\n" +
-          "रेफरल कोड का इस्तेमाल करें और फ्री कॉइन्स पाएं!\n\n" +
-          "My Referral Code: " + refCode + "\n\n" +
-          "App Download Link:\n" +
-          "https://star-follower.github.io/Official/";
-
-        var encodedMsg = encodeURIComponent(shareMessage);
-        var waUrl = "https://api.whatsapp.com/send?text=" + encodedMsg;
-        var waAppScheme = "whatsapp://send?text=" + encodedMsg;
-
-        if (window.gonative && window.gonative.share) {
-          window.gonative.share.share({ text: shareMessage });
-        } else if (navigator.share) {
-          navigator.share({ title: "Star Follower", text: shareMessage }).catch(function() {
-            window.location.href = waAppScheme;
-            setTimeout(function() { window.open(waUrl, "_blank"); }, 800);
-          });
-        } else {
-          window.location.href = waAppScheme;
-          setTimeout(function() { window.open(waUrl, "_blank"); }, 800);
-        }
-      };
-
       sfBundle = sfBundle
         .replace(
           'tC="".replace(/\/+$/,"");function lb(n){return tC+n}function qr(n,r){return fetch(lb(n),r)}',
@@ -131,7 +101,7 @@
         .replace('const JA="/assets/', 'const JA=(window.__SF_BASE_PATH||"")+"/assets/')
         .replace(
           /https:\/\/star-follower\.netlify\.app`;window\.open\(`https:\/\/wa\.me\/\?text=\$\{encodeURIComponent\(q\)\}`,"_blank"\)/,
-          'https://star-follower.github.io/Official/`;(' + customShareHandler.toString() + ')(typeof q!=="undefined"?q:"");'
+          'https://star-follower.github.io/Official/`;window.__sfShare(q,"Star Follower")'
         )
         .replace(' WhatsApp पर शेयर करें', ' दोस्तों के साथ शेयर करें')
         .replace(
