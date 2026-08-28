@@ -10,6 +10,172 @@
 
   gtag('config', 'G-N7N1172PV1');
 </script>
+    <meta http-equiv="Content-Security-Policy" content="upgrade-insecure-requests">
+
+    <!-- ═══════════════════════════════════════════════════════════════
+         MODERN ANDROID WEBVIEW COMPATIBILITY SHIM (Android 13/14/15/16+)
+         ───────────────────────────────────────────────────────────────
+         Must run before supabase-api.js, sf-webview-share.js, or the
+         app bundle so every later localStorage/fetch call in this page
+         goes through the safe versions defined here.
+
+         Root causes this addresses:
+           1. Newer WebView releases increasingly run pages in a
+              partitioned / restricted storage mode. If localStorage is
+              blocked, unavailable, or throws (SecurityError,
+              QuotaExceededError), unguarded calls elsewhere in this
+              app (there are many: sf_user_id, sf_token, sf_device_id,
+              sf_saved_creds, etc.) throw synchronously and can abort
+              whatever init logic was mid-flight — which is what shows
+              up as "Total Coins / Total Orders never load."
+           2. A fetch() to an endpoint blocked by mixed-content, CORS
+              preflight failure, or a flaky network on newer WebView
+              builds can hang indefinitely instead of rejecting quickly
+              — the promise never settles, so any UI waiting on
+              `.then()`/`await` sits frozen on the loading state forever.
+              This shim adds a hard timeout so every fetch always
+              settles (resolve or reject) within a bounded time.
+      ═══════════════════════════════════════════════════════════════ -->
+    <script>
+      (function (window, document) {
+        'use strict';
+
+        /* ── 1) SAFE localStorage ─────────────────────────────────────
+           If real localStorage throws on a basic read/write/delete
+           cycle (seen on some locked-down / privacy-hardened WebView
+           builds and Android's new partitioned storage), swap in an
+           in-memory Storage-compatible polyfill so every later
+           localStorage.getItem/setItem/removeItem call in this app
+           keeps working without throwing or freezing the page.
+           Data won't persist across app restarts in that fallback
+           case, but the UI will render instead of hanging. */
+        function makeMemoryStorage() {
+          var store = {};
+          return {
+            getItem: function (k) {
+              return Object.prototype.hasOwnProperty.call(store, k) ? store[k] : null;
+            },
+            setItem: function (k, v) { store[k] = String(v); },
+            removeItem: function (k) { delete store[k]; },
+            clear: function () { store = {}; },
+            key: function (i) { return Object.keys(store)[i] || null; },
+            get length() { return Object.keys(store).length; }
+          };
+        }
+
+        function testStorage(storage) {
+          var testKey = '__sf_storage_test__';
+          storage.setItem(testKey, '1');
+          var ok = storage.getItem(testKey) === '1';
+          storage.removeItem(testKey);
+          return ok;
+        }
+
+        try {
+          if (!window.localStorage || !testStorage(window.localStorage)) {
+            throw new Error('localStorage unusable');
+          }
+        } catch (e) {
+          try {
+            Object.defineProperty(window, 'localStorage', {
+              value: makeMemoryStorage(),
+              configurable: true,
+              writable: false
+            });
+          } catch (e2) {
+            /* Some WebViews make window.localStorage non-configurable
+               even while it throws on use — nothing more we can do,
+               but we at least don't crash trying. */
+          }
+          window.__SF_STORAGE_DEGRADED = true;
+        }
+
+        /* sessionStorage gets the same treatment — used for the APK
+           banner dismissal state and the TimeWall return-route keys. */
+        try {
+          if (!window.sessionStorage || !testStorage(window.sessionStorage)) {
+            throw new Error('sessionStorage unusable');
+          }
+        } catch (e) {
+          try {
+            Object.defineProperty(window, 'sessionStorage', {
+              value: makeMemoryStorage(),
+              configurable: true,
+              writable: false
+            });
+          } catch (e2) {}
+        }
+
+        /* ── 2) FETCH WATCHDOG ────────────────────────────────────────
+           Wrap the native fetch so every call is guaranteed to settle
+           within FETCH_TIMEOUT_MS. Newer WebView network stacks can
+           silently stall a request blocked by mixed-content or CORS
+           policy instead of rejecting it immediately, which is what
+           freezes "Total Coins" / "Total Orders" on the loading state.
+           This wrapper is installed first, so every later fetch
+           wrapper in this app (supabase-api.js, the admin CPA-URL
+           interceptor, etc.) sits on top of it and inherits the
+           timeout automatically. */
+        var FETCH_TIMEOUT_MS = 15000;
+        var _nativeFetch = window.fetch ? window.fetch.bind(window) : null;
+
+        if (_nativeFetch) {
+          window.fetch = function (input, init) {
+            init = init || {};
+
+            /* Respect/merge an existing AbortSignal if the caller
+               already supplied one instead of overwriting it. */
+            var controller = null;
+            var timer = null;
+            var finalInit = init;
+
+            if (typeof AbortController === 'function' && !init.signal) {
+              controller = new AbortController();
+              finalInit = Object.assign({}, init, { signal: controller.signal });
+              timer = setTimeout(function () {
+                controller.abort();
+              }, FETCH_TIMEOUT_MS);
+            }
+
+            var settle = function () {
+              if (timer) clearTimeout(timer);
+            };
+
+            return _nativeFetch(input, finalInit).then(
+              function (res) { settle(); return res; },
+              function (err) {
+                settle();
+                // Normalize an abort-by-timeout into a clear, catchable
+                // error so app code's .catch()/try-catch always fires
+                // instead of the request hanging silently.
+                if (err && err.name === 'AbortError' && controller) {
+                  var timeoutErr = new Error('Request timed out after ' + FETCH_TIMEOUT_MS + 'ms: ' + (typeof input === 'string' ? input : (input && input.url) || ''));
+                  timeoutErr.name = 'TimeoutError';
+                  throw timeoutErr;
+                }
+                throw err;
+              }
+            );
+          };
+        }
+
+        /* ── 3) SAFETY NET for anything that still slips through ───────
+           If a fetch/storage-related promise rejects with nobody
+           listening, log it quietly instead of letting the WebView's
+           default unhandled-rejection behavior appear to "freeze" or
+           crash the page. This does not hide errors from the console,
+           it only stops them from taking down the render loop. */
+        window.addEventListener('unhandledrejection', function (event) {
+          var reason = event && event.reason;
+          var name = reason && reason.name;
+          if (name === 'TimeoutError' || name === 'AbortError' || name === 'TypeError') {
+            console.warn('[sf-webview-compat] network call did not complete cleanly:', reason);
+            event.preventDefault();
+          }
+        });
+      }(window, document));
+    </script>
+
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
     <title>Star Follower</title>
