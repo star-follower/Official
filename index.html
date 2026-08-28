@@ -40,6 +40,43 @@
       (function (window, document) {
         'use strict';
 
+        /* ── 0) DIAGNOSTIC LOG (feeds the on-screen debug overlay
+           further down the page) ─────────────────────────────────────
+           We do not know the internal structure of the compiled React
+           bundle's navigation/router, so we cannot blindly rewrite it
+           from index.html. What we CAN do reliably is capture exactly
+           what actually goes wrong on a real device — every thrown
+           error and every network call's outcome — so the real root
+           cause can be identified instead of guessed at. */
+        window.__sfErrorLog = [];
+        window.__sfNetLog = [];
+        window.__sfPageLoadedAt = Date.now();
+        window.__sfLastApiSuccessAt = null;
+
+        function sfLog(entry) {
+          entry.ts = Date.now();
+          window.__sfErrorLog.push(entry);
+          if (window.__sfErrorLog.length > 100) window.__sfErrorLog.shift();
+        }
+
+        window.addEventListener('error', function (e) {
+          sfLog({
+            type: 'error',
+            message: e && e.message,
+            source: e && e.filename,
+            line: e && e.lineno,
+            col: e && e.colno
+          });
+        });
+
+        var _origConsoleError = console.error.bind(console);
+        console.error = function () {
+          try {
+            sfLog({ type: 'console.error', message: Array.prototype.slice.call(arguments).map(String).join(' ') });
+          } catch (e) {}
+          return _origConsoleError.apply(console, arguments);
+        };
+
         /* ── 1) SAFE localStorage ─────────────────────────────────────
            If real localStorage throws on a basic read/write/delete
            cycle (seen on some locked-down / privacy-hardened WebView
@@ -115,44 +152,80 @@
            This wrapper is installed first, so every later fetch
            wrapper in this app (supabase-api.js, the admin CPA-URL
            interceptor, etc.) sits on top of it and inherits the
-           timeout automatically. */
+           timeout automatically.
+
+           IMPORTANT: the app's data layer (react-query) calls fetch
+           with its OWN AbortSignal already attached (for cancelling
+           on unmount / refetch). An earlier version of this shim
+           skipped adding a timeout whenever a signal was already
+           present — which meant the exact calls that populate Total
+           Coins / Total Orders / Services (all react-query driven)
+           had NO timeout at all. Fixed here by always installing our
+           own controller and forwarding an abort from the caller's
+           signal into it, so both can trigger an abort but our
+           timeout always applies regardless. */
         var FETCH_TIMEOUT_MS = 15000;
         var _nativeFetch = window.fetch ? window.fetch.bind(window) : null;
 
-        if (_nativeFetch) {
+        if (_nativeFetch && typeof AbortController === 'function') {
           window.fetch = function (input, init) {
             init = init || {};
+            var url = typeof input === 'string' ? input : ((input && input.url) || '');
+            var startedAt = Date.now();
+            var callerSignal = init.signal;
 
-            /* Respect/merge an existing AbortSignal if the caller
-               already supplied one instead of overwriting it. */
-            var controller = null;
-            var timer = null;
-            var finalInit = init;
+            var controller = new AbortController();
+            var timer = setTimeout(function () { controller.abort(); }, FETCH_TIMEOUT_MS);
 
-            if (typeof AbortController === 'function' && !init.signal) {
-              controller = new AbortController();
-              finalInit = Object.assign({}, init, { signal: controller.signal });
-              timer = setTimeout(function () {
+            if (callerSignal) {
+              if (callerSignal.aborted) {
                 controller.abort();
-              }, FETCH_TIMEOUT_MS);
+              } else {
+                callerSignal.addEventListener('abort', function () {
+                  controller.abort();
+                }, { once: true });
+              }
             }
 
-            var settle = function () {
-              if (timer) clearTimeout(timer);
-            };
+            var finalInit = Object.assign({}, init, { signal: controller.signal });
+            var settle = function () { clearTimeout(timer); };
+
+            function recordNet(entry) {
+              entry.url = url;
+              entry.method = (init.method || 'GET');
+              entry.ms = Date.now() - startedAt;
+              entry.ts = Date.now();
+              window.__sfNetLog.push(entry);
+              if (window.__sfNetLog.length > 60) window.__sfNetLog.shift();
+              if (entry.ok) window.__sfLastApiSuccessAt = Date.now();
+            }
 
             return _nativeFetch(input, finalInit).then(
-              function (res) { settle(); return res; },
+              function (res) {
+                settle();
+                recordNet({ ok: res.ok, status: res.status });
+                return res;
+              },
               function (err) {
                 settle();
-                // Normalize an abort-by-timeout into a clear, catchable
-                // error so app code's .catch()/try-catch always fires
-                // instead of the request hanging silently.
-                if (err && err.name === 'AbortError' && controller) {
-                  var timeoutErr = new Error('Request timed out after ' + FETCH_TIMEOUT_MS + 'ms: ' + (typeof input === 'string' ? input : (input && input.url) || ''));
+                if (err && err.name === 'AbortError') {
+                  // A caller-initiated abort (e.g. react-query cancelling
+                  // on unmount/refetch) is not a failure — pass it through
+                  // unchanged so the app's own cancellation handling works.
+                  if (callerSignal && callerSignal.aborted) {
+                    recordNet({ ok: false, status: 0, error: 'aborted-by-caller' });
+                    throw err;
+                  }
+                  // Otherwise our own watchdog fired — normalize it into a
+                  // clearly named, catchable error so app code's
+                  // .catch()/try-catch always fires instead of the
+                  // request hanging silently.
+                  var timeoutErr = new Error('Request timed out after ' + FETCH_TIMEOUT_MS + 'ms: ' + url);
                   timeoutErr.name = 'TimeoutError';
+                  recordNet({ ok: false, status: 0, error: 'timeout' });
                   throw timeoutErr;
                 }
+                recordNet({ ok: false, status: 0, error: (err && err.message) || String(err) });
                 throw err;
               }
             );
@@ -168,6 +241,7 @@
         window.addEventListener('unhandledrejection', function (event) {
           var reason = event && event.reason;
           var name = reason && reason.name;
+          sfLog({ type: 'unhandledrejection', message: (reason && (reason.message || String(reason))) || '' });
           if (name === 'TimeoutError' || name === 'AbortError' || name === 'TypeError') {
             console.warn('[sf-webview-compat] network call did not complete cleanly:', reason);
             event.preventDefault();
@@ -261,6 +335,33 @@
         .replace(
           'J1=(n,{replace:r=!1,state:i=null}={})=>history[r?mf:hf](i,"",n)',
           'J1=(n,{replace:r=!1,state:i=null}={})=>{const o=(window.__SF_BASE_PATH||"/").replace(/\\/+$/,""),e=n&&n.startsWith("/")?n:"/"+(n||"");history[r?mf:hf](i,"",o+"#"+e)}'
+        )
+        /*
+         * ROOT-CAUSE FIX — bottom nav tabs not switching on newer Android:
+         * The router's location getter/setter (Ip/J1, patched above) were
+         * already switched to hash-based navigation, but the Link
+         * component's `hrefs` formatter was still the untouched identity
+         * function (`n=>n`). That meant every rendered <a href="/earn">
+         * (etc.) carried a raw root-relative path instead of a same-page
+         * hash URL. Clicks were still intercepted by the Link's onClick
+         * handler in most cases, but that literal href is what the
+         * browser/WebView falls back to for anything outside a clean
+         * synchronous click — including the touch-to-click handling and
+         * link pre-navigation checks that changed in newer Chromium-based
+         * WebView releases (Android 13+). A WebView wrapper's navigation
+         * policy can then silently swallow that fallback attempt at
+         * "/earn" (wrong path — GitHub Pages serves this app under
+         * /Official/, and it isn't a real page anyway), which is exactly
+         * what "tapping the tab does nothing" looks like from the
+         * outside. Making the href a real, safe, same-page hash URL
+         * (e.g. "/Official/#/earn") means even a fallback/native
+         * navigation just changes the URL fragment — never a real
+         * top-level request, so it can't be blocked or misrouted on any
+         * Android version.
+         */
+        .replace(
+          'hrefs:n=>n,aroundNav:(n,r,i)=>n(r,i)}',
+          'hrefs:n=>(window.__sfAppPath?window.__sfAppPath(n):n),aroundNav:(n,r,i)=>n(r,i)}'
         )
         .replace('const nC="/assets/', 'const nC=(window.__SF_BASE_PATH||"")+"/assets/')
         .replace('const ZA="/assets/', 'const ZA=(window.__SF_BASE_PATH||"")+"/assets/')
@@ -787,6 +888,41 @@
       </div>
     </div>
 
+    <!-- ── Stuck-load safety net ───────────────────────────────────
+         Shows only if no API call has succeeded within SF_STUCK_MS of
+         page load — i.e. the app is genuinely stuck, not just slow. -->
+    <div id="sf-retry-banner" style="display:none;position:fixed;bottom:0;left:0;right:0;z-index:999997;background:linear-gradient(135deg,#7c2d12,#991b1b);border-top:2px solid #fca5a5;padding:14px 18px;box-shadow:0 -4px 24px rgba(0,0,0,0.35);font-family:'Inter',sans-serif;box-sizing:border-box;">
+      <div style="max-width:480px;margin:0 auto;display:flex;align-items:center;gap:12px;">
+        <div style="flex:1;min-width:0;">
+          <div style="color:#fff;font-weight:700;font-size:13.5px;line-height:1.3;">Loading is taking longer than usual</div>
+          <div style="color:#fecaca;font-size:11.5px;margin-top:2px;">Your connection or this device's WebView may be blocking a request. Tap Retry, or Report to send diagnostics.</div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:6px;flex-shrink:0;">
+          <button id="sf-retry-btn" type="button" style="background:#fff;color:#7c2d12;border:none;border-radius:9px;padding:8px 14px;font-weight:700;font-size:12.5px;cursor:pointer;font-family:'Inter',sans-serif;">Retry</button>
+          <button id="sf-retry-report-btn" type="button" style="background:transparent;color:#fecaca;border:1px solid rgba(255,255,255,0.35);border-radius:9px;padding:6px 14px;font-size:11px;cursor:pointer;font-family:'Inter',sans-serif;">Report</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Diagnostic overlay ──────────────────────────────────────
+         Hidden by default. Open it by tapping the invisible hotspot
+         in the top-right corner 6 times within 3 seconds (same idea
+         as Android's "tap build number to enable developer options").
+         Shows real errors/network activity captured on THIS device,
+         so a nav/data bug can be fixed from actual evidence instead
+         of guesswork. -->
+    <div id="sf-debug-hotspot" style="position:fixed;top:0;right:0;width:56px;height:56px;z-index:999996;"></div>
+    <div id="sf-debug-overlay" style="display:none;position:fixed;inset:0;z-index:999999;background:#0a0f1e;color:#e2e8f0;font-family:'Inter',monospace,sans-serif;overflow-y:auto;-webkit-overflow-scrolling:touch;">
+      <div style="position:sticky;top:0;background:rgba(10,15,30,0.97);border-bottom:1px solid rgba(201,168,76,0.25);padding:14px 16px;display:flex;align-items:center;justify-content:space-between;">
+        <strong style="color:#c9a84c;font-size:14px;">Diagnostics</strong>
+        <div style="display:flex;gap:8px;">
+          <button id="sf-debug-copy" type="button" style="background:rgba(201,168,76,0.15);border:1px solid rgba(201,168,76,0.4);color:#c9a84c;border-radius:8px;padding:6px 12px;font-size:11.5px;cursor:pointer;">Copy</button>
+          <button id="sf-debug-close" type="button" style="background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);color:#cbd5e1;border-radius:8px;padding:6px 12px;font-size:11.5px;cursor:pointer;">Close</button>
+        </div>
+      </div>
+      <pre id="sf-debug-body" style="padding:14px 16px;font-size:11px;line-height:1.6;white-space:pre-wrap;word-break:break-word;margin:0;"></pre>
+    </div>
+
     <!-- ── React root ──────────────────────────────────────────── -->
     <div id="root"></div>
 
@@ -1279,6 +1415,106 @@
         return _realOpen(url, target, features);
       };
 
+    }());
+    </script>
+
+    <!-- ═══════════════════════════════════════════════════════════════
+         STUCK-LOAD BANNER + DIAGNOSTIC OVERLAY WIRING
+         ─────────────────────────────────────────────────────────────
+         Purely additive safety net + evidence-gathering. Does not
+         touch, wrap, or assume anything about the app bundle's nav/
+         router internals — it only reads the __sfErrorLog/__sfNetLog
+         populated by the head shim and reacts to real signals
+         (has an API call ever succeeded? how long has it been?).
+      ═══════════════════════════════════════════════════════════════ -->
+    <script>
+    (function () {
+      'use strict';
+
+      var SF_STUCK_MS = 12000;      // show banner if no API success by then
+      var banner  = document.getElementById('sf-retry-banner');
+      var overlay = document.getElementById('sf-debug-overlay');
+      var body    = document.getElementById('sf-debug-body');
+
+      function fmtLog() {
+        var lines = [];
+        lines.push('=== Star Follower Diagnostics ===');
+        lines.push('UA: ' + navigator.userAgent);
+        lines.push('Loaded: ' + new Date(window.__sfPageLoadedAt).toISOString());
+        lines.push('Storage degraded: ' + !!window.__SF_STORAGE_DEGRADED);
+        lines.push('Last API success: ' + (window.__sfLastApiSuccessAt ? new Date(window.__sfLastApiSuccessAt).toISOString() : 'never'));
+        lines.push('');
+        lines.push('--- Errors (' + window.__sfErrorLog.length + ') ---');
+        window.__sfErrorLog.forEach(function (e) {
+          lines.push('[' + new Date(e.ts).toISOString() + '] ' + e.type + ': ' + e.message +
+            (e.source ? ' (' + e.source + ':' + e.line + ':' + e.col + ')' : ''));
+        });
+        lines.push('');
+        lines.push('--- Network (' + window.__sfNetLog.length + ') ---');
+        window.__sfNetLog.forEach(function (n) {
+          lines.push('[' + new Date(n.ts).toISOString() + '] ' + n.method + ' ' + n.url +
+            ' -> ' + (n.ok ? 'OK ' + n.status : 'FAIL ' + (n.error || n.status)) + ' (' + n.ms + 'ms)');
+        });
+        return lines.join('\n');
+      }
+
+      /* ── Stuck-load watchdog ─────────────────────────────────────── */
+      var _checkTimer = setInterval(function () {
+        var elapsed = Date.now() - window.__sfPageLoadedAt;
+        if (elapsed < SF_STUCK_MS) return;
+        if (window.__sfLastApiSuccessAt) {
+          clearInterval(_checkTimer);
+          return; // data has loaded at least once, app is not stuck
+        }
+        banner.style.display = 'block';
+      }, 1500);
+
+      document.getElementById('sf-retry-btn').addEventListener('click', function () {
+        window.location.reload();
+      });
+
+      document.getElementById('sf-retry-report-btn').addEventListener('click', function () {
+        banner.style.display = 'none';
+        body.textContent = fmtLog();
+        overlay.style.display = 'block';
+      });
+
+      /* ── Hidden diagnostic overlay toggle: 6 taps in 3s on the
+         top-right hotspot ─────────────────────────────────────────── */
+      var _taps = [];
+      document.getElementById('sf-debug-hotspot').addEventListener('click', function () {
+        var now = Date.now();
+        _taps.push(now);
+        _taps = _taps.filter(function (t) { return now - t < 3000; });
+        if (_taps.length >= 6) {
+          _taps = [];
+          body.textContent = fmtLog();
+          overlay.style.display = 'block';
+        }
+      });
+
+      document.getElementById('sf-debug-close').addEventListener('click', function () {
+        overlay.style.display = 'none';
+      });
+
+      document.getElementById('sf-debug-copy').addEventListener('click', function () {
+        var text = body.textContent;
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(text).catch(function () { sfFallbackCopy(text); });
+        } else {
+          sfFallbackCopy(text);
+        }
+        function sfFallbackCopy(t) {
+          var ta = document.createElement('textarea');
+          ta.value = t;
+          ta.style.position = 'fixed';
+          ta.style.opacity = '0';
+          document.body.appendChild(ta);
+          ta.select();
+          try { document.execCommand('copy'); } catch (e) {}
+          document.body.removeChild(ta);
+        }
+      });
     }());
     </script>
 
