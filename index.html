@@ -20,7 +20,7 @@
          goes through the safe versions defined here.
 
          Intentionally SILENT for end users — no debug overlays, no
-         visible retry banners, no on-screen logs. It does three things:
+         visible retry banners, no on-screen logs. It does four things:
 
            1. STORAGE SAFETY NET — if localStorage/sessionStorage is
               blocked or throws (some WebView builds run pages in a
@@ -28,17 +28,12 @@
               in-memory Storage-compatible polyfill so app code never
               throws mid-init.
 
-           2. REQUEST QUEUE (no parallel bursts) — API calls (anything
-              to /api/* or *.supabase.co) are funnelled through a small
-              queue with a low concurrency cap instead of firing all at
-              once on tab switch / app launch. Several requests kicked
-              off in the same tick (coins, orders, services, profile —
-              each usually mounted by a different component) are common
-              on this app's Home/Earn screens, and issuing them all
-              simultaneously is exactly the kind of burst that trips up
-              rendering on some WebView builds. Serializing them removes
-              the burst without meaningfully slowing the app down, since
-              each call is small and fast on its own.
+           2. SMOOTH HASH NAVIGATION — history.pushState/replaceState
+              are wrapped (preserving native behavior exactly) to also
+              emit a 'locationchange' event, so tab taps update the
+              hash (#/, #/services, #/earn, #/orders, #/refer) without
+              ever triggering a full-page reload or a re-evaluation of
+              the page from scratch. #root is never unmounted by this.
 
            3. OFFLINE-FIRST CACHE — successful GET/JSON responses to API
               endpoints are persisted to localStorage. On the very next
@@ -46,8 +41,17 @@
               a slow/queued request, or an outright failure), the cached
               copy is returned immediately so the UI always has data to
               render, while a fresh copy is fetched in the background to
-              keep the cache warm for next time. The screen is never left
-              blank or frozen waiting on a slow round trip.
+              keep the cache warm for next time (stale-while-revalidate).
+              The screen is never left blank or frozen waiting on a
+              slow round trip.
+
+           4. REQUEST QUEUE + 3s WATCHDOG (no parallel bursts) — API
+              calls (anything to /api/* or *.supabase.co) are funnelled
+              through a small queue with a low concurrency cap instead
+              of firing all at once on tab switch / app launch, and any
+              single call is guaranteed to settle (resolve, from cache
+              if needed, or reject cleanly) within 3 seconds — never an
+              uncaught hang or an uncaught promise rejection.
       ═══════════════════════════════════════════════════════════════ -->
     <script>
       (function (window, document) {
@@ -118,7 +122,39 @@
           } catch (e2) {}
         }
 
-        /* ── 2) PERSISTENT API RESPONSE CACHE (offline-first render) ──
+        /* ── 2) SMOOTH HASH NAVIGATION ──────────────────────────────
+           The app bundle's router (patched further below, in the
+           <script type="module"> loader) already navigates by calling
+           history.pushState/replaceState directly against an internal
+           location store — it does not reload the page or unmount
+           #root on tab taps. This wrapper is purely additive belt-
+           and-suspenders: it preserves native pushState/replaceState
+           behavior exactly (same arguments, same `this`), and also
+           dispatches a lightweight 'locationchange' event so nothing
+           has to poll or fall back to a hashchange-triggered re-
+           evaluation of the page to notice a route change. Wrapped in
+           try/catch so a failure here can never block navigation. */
+        try {
+          var _origPushState = history.pushState.bind(history);
+          var _origReplaceState = history.replaceState.bind(history);
+
+          history.pushState = function () {
+            var ret = _origPushState.apply(history, arguments);
+            try { window.dispatchEvent(new Event('locationchange')); } catch (e) {}
+            return ret;
+          };
+          history.replaceState = function () {
+            var ret = _origReplaceState.apply(history, arguments);
+            try { window.dispatchEvent(new Event('locationchange')); } catch (e) {}
+            return ret;
+          };
+        } catch (e) {
+          /* If history can't be patched on this WebView, navigation
+             still works exactly as before — nothing else depends on
+             the 'locationchange' event existing. */
+        }
+
+        /* ── 3) PERSISTENT API RESPONSE CACHE (offline-first render) ──
            Small bounded JSON blob in localStorage: urlKey -> {status,
            headers, body, ts}. Survives reloads/relaunches, so the very
            first paint after opening the app (or switching tabs) can
@@ -176,7 +212,7 @@
           return url.indexOf('/api/') !== -1 || url.indexOf('supabase.co') !== -1;
         }
 
-        /* ── 3) SEQUENTIAL REQUEST QUEUE (no parallel bursts) ──────────
+        /* ── 4) SEQUENTIAL REQUEST QUEUE (no parallel bursts) ──────────
            Automatic/background GET calls to API endpoints are run one
            at a time (small cap, not unlimited-parallel) instead of all
            firing together the instant a screen mounts. User-initiated
@@ -204,7 +240,7 @@
           });
         }
 
-        /* ── 4) FETCH WRAPPER: timeout + queue + offline-first cache ──
+        /* ── 5) FETCH WRAPPER: timeout + queue + offline-first cache ──
            Every fetch() is guaranteed to settle within FETCH_TIMEOUT_MS.
            This wrapper is installed first, so every later fetch wrapper
            in this app (supabase-api.js, the admin CPA-URL interceptor,
@@ -227,7 +263,7 @@
            unmount / refetch). We always install our own controller and
            forward an abort from the caller's signal into it, so both
            can trigger an abort but our timeout always applies. */
-        var FETCH_TIMEOUT_MS = 5000;
+        var FETCH_TIMEOUT_MS = 3000; // 3s strict fallback window per spec
         var _nativeFetch = window.fetch ? window.fetch.bind(window) : null;
 
         function timedFetch(input, init, url) {
@@ -314,7 +350,7 @@
           };
         }
 
-        /* ── 5) SAFETY NET for anything that still slips through ───────
+        /* ── 6) SAFETY NET for anything that still slips through ───────
            If a fetch/storage-related promise rejects with nobody
            listening, swallow it quietly (console only) instead of
            letting the WebView's default unhandled-rejection behavior
