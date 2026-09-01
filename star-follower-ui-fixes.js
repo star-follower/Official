@@ -60,6 +60,9 @@
     document.body.classList.toggle('sf-login', path === '/login');
     document.body.classList.toggle('sf-home', path === '/' && isLoggedIn());
     document.body.classList.toggle('sf-earn', path === '/earn' && isLoggedIn());
+    document.body.classList.toggle('sf-services', path === '/services' && isLoggedIn());
+    document.body.classList.toggle('sf-orders', path === '/orders' && isLoggedIn());
+    document.body.classList.toggle('sf-referrals', path === '/referrals' && isLoggedIn());
   }
 
   function getCurrentUser() {
@@ -206,29 +209,11 @@
     });
   }
 
-  function createHomeVideoCard(videoUrl) {
-    if (!videoUrl || !document.body.classList.contains('sf-home')) return;
-    var main = document.querySelector('#root main');
-    if (!main || document.getElementById('sf-home-video-card')) return;
-
-    var card = document.createElement('a');
-    card.id = 'sf-home-video-card';
-    card.href = videoUrl;
-    card.target = '_blank';
-    card.rel = 'noopener noreferrer';
-    card.setAttribute('aria-label', 'सभी फ़ीचर्स समझने के लिए यहाँ क्लिक करें (वीडियो देखें)');
-    card.innerHTML =
-      '<span class="sf-home-video-title">🎬 ऐप कैसे इस्तेमाल करें? (वीडियो देखें)</span>' +
-      '<span>• Daily Task से कॉइन कैसे कमाएं?</span>' +
-      '<span>• 2 घंटे में Bonus कैसे पाएं?</span>' +
-      '<span>• Coins को Redeem कैसे करें?</span>' +
-      '<span>• सभी फ़ीचर्स समझने के लिए यहाँ क्लिक करें (वीडियो देखें)</span>';
-    main.insertBefore(card, main.firstElementChild);
-  }
-
   function ensureHomeVideoCard() {
-    if (!document.body.classList.contains('sf-home')) return;
-    fetchTutorialVideoUrl().then(createHomeVideoCard);
+    // The React bundle now owns the Home/Earn tutorial banner and modal.
+    // Keep this legacy DOM injector disabled so it cannot create an
+    // external target="_blank" link or duplicate the React component.
+    return;
   }
 
   function cleanHomeHero() {
@@ -375,6 +360,9 @@
   }
 
   function removeEmbeddedTutorialPlayers() {
+    var path = getAppRoutePath();
+    if (path !== '/services' && path !== '/orders' && path !== '/referrals') return;
+
     var main = document.querySelector('#root main');
     if (!main) return;
 
@@ -459,10 +447,6 @@
 
   function refreshPageEnhancements() {
     updateRouteClasses();
-    document.body.classList.toggle(
-      'sf-services',
-      getAppRoutePath() === '/services' && isLoggedIn()
-    );
     ensureHeaderCoins();
     syncSuccessfulOrdersCounter();
     hideApkBannerInApp();
