@@ -10,6 +10,8 @@
 
   var SUPABASE_URL      = 'https://lgqovwlmicjinwrteivn.supabase.co';
   var SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxncW92d2xtaWNqaW53cnRlaXZuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODIzOTI2NzAsImV4cCI6MjA5Nzk2ODY3MH0.uFU2sczoAZYUcVdZQG-8IGizw2XfFlRY7sbxqaPuEzs';
+  var VIEW_CACHE_KEY    = 'sf_view_cache_v2';
+  var VIEW_CACHE_LIMIT  = 30;
 
   // Supabase JS is loaded via CDN in index.html before this script
   var db = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
@@ -65,6 +67,59 @@
   function parseBody(init) {
     try { return JSON.parse((init && init.body) || '{}'); } catch (e) { return {}; }
   }
+
+  function readViewCache() {
+    try {
+      var raw = localStorage.getItem(VIEW_CACHE_KEY);
+      var parsed = raw ? JSON.parse(raw) : {};
+      return parsed && typeof parsed === 'object' ? parsed : {};
+    } catch (e) {
+      return {};
+    }
+  }
+
+  function writeViewCache(cache) {
+    try {
+      var keys = Object.keys(cache);
+      keys.sort(function (a, b) {
+        return (cache[b].updatedAt || 0) - (cache[a].updatedAt || 0);
+      });
+      while (keys.length > VIEW_CACHE_LIMIT) delete cache[keys.pop()];
+      localStorage.setItem(VIEW_CACHE_KEY, JSON.stringify(cache));
+    } catch (e) {
+      // Storage is best-effort. Live API responses must never depend on it.
+    }
+  }
+
+  function cacheViewResponse(url, response) {
+    if (!response || !response.ok) return;
+    try {
+      response.clone().json().then(function (data) {
+        var cache = readViewCache();
+        cache[url] = { data: data, updatedAt: Date.now() };
+        writeViewCache(cache);
+      }).catch(function () {});
+    } catch (e) {}
+  }
+
+  window.__sfReadViewCache = function (url, fallback) {
+    var cache = readViewCache();
+    var entry = cache[url];
+    return {
+      data: entry && entry.data != null ? entry.data : fallback,
+      updatedAt: entry && entry.updatedAt ? entry.updatedAt : 0,
+      hasCachedData: !!entry
+    };
+  };
+
+  var _syncWindows = {};
+  window.__sfCanSync = function (key, minimumWindowMs) {
+    var now = Date.now();
+    var lastRun = _syncWindows[key] || 0;
+    if (now - lastRun < minimumWindowMs) return false;
+    _syncWindows[key] = now;
+    return true;
+  };
 
   // Detect "function does not exist" RPC mismatch errors from Supabase/PostgREST
   function isRpcSchemaMismatch(err) {
@@ -824,10 +879,24 @@
 
     if (url.startsWith('/api/')) {
       try {
-        return await route(url, init);
+        // Force the lower-level WebView fetch wrapper to await a fresh
+        // Supabase response. React already rendered synchronously from the
+        // view cache, so this request is the silent revalidation phase.
+        window.__sfApiRouteRevalidating = (window.__sfApiRouteRevalidating || 0) + 1;
+        var response = await route(url, init);
+        if (((init && init.method) || 'GET').toUpperCase() === 'GET') {
+          cacheViewResponse(url, response);
+        }
+        return response;
       } catch (err) {
+        if (init && init.signal && init.signal.aborted) throw err;
         console.error('[StarFollower API]', err);
         return errRes('Internal error: ' + err.message, 500);
+      } finally {
+        window.__sfApiRouteRevalidating = Math.max(
+          0,
+          (window.__sfApiRouteRevalidating || 1) - 1
+        );
       }
     }
 
