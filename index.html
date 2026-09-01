@@ -45,12 +45,12 @@
               The screen is never left blank or frozen waiting on a
               slow round trip.
 
-           4. REQUEST QUEUE + 3s WATCHDOG (no parallel bursts) — API
+           4. REQUEST QUEUE + 2s WATCHDOG (no parallel bursts) — API
               calls (anything to /api/* or *.supabase.co) are funnelled
               through a small queue with a low concurrency cap instead
               of firing all at once on tab switch / app launch, and any
               single call is guaranteed to settle (resolve, from cache
-              if needed, or reject cleanly) within 3 seconds — never an
+              if needed, or reject cleanly) within 2 seconds — never an
               uncaught hang or an uncaught promise rejection.
       ═══════════════════════════════════════════════════════════════ -->
     <script>
@@ -263,7 +263,7 @@
            unmount / refetch). We always install our own controller and
            forward an abort from the caller's signal into it, so both
            can trigger an abort but our timeout always applies. */
-        var FETCH_TIMEOUT_MS = 3000; // 3s strict fallback window per spec
+        var FETCH_TIMEOUT_MS = 2000; // 2s strict fallback window per spec
         var _nativeFetch = window.fetch ? window.fetch.bind(window) : null;
 
         function timedFetch(input, init, url) {
@@ -485,6 +485,23 @@
         .replace(
           'hrefs:n=>n,aroundNav:(n,r,i)=>n(r,i)}',
           'hrefs:n=>(window.__sfAppPath?window.__sfAppPath(n):n),aroundNav:(n,r,i)=>n(r,i)}'
+        )
+        /*
+         * The imported bundle has no authored React source tree. Inject the
+         * tutorial component into the same reproducible transform used for
+         * the existing WebView compatibility fixes.
+         */
+        .replace(
+          'function WA(){',
+          'function xO({videoUrl:n}){const[r,i]=g.useState(!1),s=g.useRef(null);g.useEffect(()=>()=>{s.current&&(s.current.pause(),s.current.removeAttribute("src"))},[]);if(!n)return null;return v.jsxs(v.Fragment,{children:[v.jsxs("button",{type:"button",className:"sf-tutorial-banner",onClick:()=>i(!0),children:[v.jsx("span",{className:"sf-tutorial-title",children:"🎬 ऐप कैसे इस्तेमाल करें? (वीडियो देखें)"}),v.jsx("span",{children:"• Daily Task से कॉइन कैसे कमाएं?"}),v.jsx("span",{children:"• 2 घंटे में Bonus कैसे पाएं?"}),v.jsx("span",{children:"• Coins को Redeem कैसे करें?"})]}),r&&v.jsx("div",{className:"sf-tutorial-backdrop",role:"presentation",onClick:()=>i(!1),children:v.jsxs("div",{className:"sf-tutorial-modal",role:"dialog","aria-modal":!0,"aria-label":"Tutorial Video",onClick:e=>e.stopPropagation(),children:[v.jsxs("div",{className:"flex items-center justify-between gap-3 mb-3",children:[v.jsx("h2",{className:"text-lg font-bold text-emerald-300",children:"App Kaise Use Kare"}),v.jsx("button",{type:"button",className:"text-2xl text-white px-2","aria-label":"Close tutorial",onClick:()=>i(!1),children:"×"})]}),v.jsx("video",{ref:s,src:n,controls:!0,playsInline:!0,autoPlay:!0,className:"sf-tutorial-player"})]})})]})}function WA(){'
+        )
+        .replace(
+          'function WA(){const n=ka()||"",{data:r,isLoading:i}=ao(n);return v.jsxs("div",{className:"flex flex-col gap-6",children:[',
+          'function WA(){const n=ka()||"",{data:r,isLoading:i}=ao(n),{data:s}=eO();return v.jsxs("div",{className:"flex flex-col gap-6",children:[v.jsx(xO,{videoUrl:s?.videoUrl}),'
+        )
+        .replace(
+          'Wvid&&v.jsxs("div",{className:"rounded-2xl overflow-hidden border border-primary/20 bg-black shadow-lg",children:[v.jsx("p",{className:"text-xs text-primary/70 px-3 pt-2 pb-1 font-semibold uppercase tracking-wider",children:"📹 Tutorial Video"}),v.jsx("video",{src:Wvid,controls:!0,controlsList:"nodownload",className:"w-full",style:{maxHeight:"220px",background:"#000",display:"block"},playsInline:!0})]}),',
+          'Wvid&&v.jsx(xO,{videoUrl:Wvid}),'
         )
         /*
          * React Query view hooks now hydrate synchronously from the
@@ -897,19 +914,144 @@
         color: #052e16 !important;
       }
 
-      /* Tutorial media is opened externally from the Home link. Never
-         render an embedded tutorial player on Home or Earn. */
-      body.sf-home #root main video,
-      body.sf-earn #root main video,
-      body.sf-home #root main iframe[title*="Tutorial"],
-      body.sf-home #root main iframe[title*="tutorial"],
-      body.sf-home #root main iframe[title*="Video"],
-      body.sf-home #root main iframe[title*="video"],
-      body.sf-earn #root main iframe[title*="Tutorial"],
-      body.sf-earn #root main iframe[title*="tutorial"],
-      body.sf-earn #root main iframe[title*="Video"],
-      body.sf-earn #root main iframe[title*="video"] {
+      /* Tutorial media is allowed only inside the React modal on Home/Earn.
+         Defensive hiding keeps it out of Services, Orders, and Refer. */
+      body.sf-services #root main video,
+      body.sf-orders #root main video,
+      body.sf-referrals #root main video,
+      body.sf-services #root main iframe[title*="Tutorial"],
+      body.sf-services #root main iframe[title*="tutorial"],
+      body.sf-services #root main iframe[title*="Video"],
+      body.sf-services #root main iframe[title*="video"],
+      body.sf-orders #root main iframe[title*="Tutorial"],
+      body.sf-orders #root main iframe[title*="tutorial"],
+      body.sf-orders #root main iframe[title*="Video"],
+      body.sf-orders #root main iframe[title*="video"],
+      body.sf-referrals #root main iframe[title*="Tutorial"],
+      body.sf-referrals #root main iframe[title*="tutorial"],
+      body.sf-referrals #root main iframe[title*="Video"],
+      body.sf-referrals #root main iframe[title*="video"] {
         display: none !important;
+      }
+
+      .sf-tutorial-banner {
+        width: 100%;
+        border: 1px solid rgba(74, 222, 128, 0.4);
+        border-radius: 14px;
+        padding: 14px 16px;
+        color: #bbf7d0;
+        background: linear-gradient(135deg, rgba(20, 83, 45, 0.9), rgba(6, 78, 59, 0.82));
+        box-shadow: 0 8px 22px rgba(0, 0, 0, 0.16);
+        font-size: 12px;
+        line-height: 1.45;
+        text-align: left;
+        cursor: pointer;
+        transition: transform 0.16s ease, border-color 0.16s ease;
+      }
+
+      .sf-tutorial-banner:hover,
+      .sf-tutorial-banner:focus-visible {
+        border-color: #86efac;
+        outline: none;
+        transform: translateY(-1px);
+      }
+
+      .sf-tutorial-title {
+        display: block;
+        margin-bottom: 2px;
+        color: #fff;
+        font-size: 14px;
+        font-weight: 800;
+      }
+
+      .sf-tutorial-backdrop {
+        position: fixed;
+        inset: 0;
+        z-index: 10000;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 18px;
+        background: rgba(2, 6, 23, 0.82);
+        backdrop-filter: blur(4px);
+      }
+
+      .sf-tutorial-modal {
+        width: min(680px, 100%);
+        max-height: min(88vh, 620px);
+        overflow: auto;
+        padding: 16px;
+        border: 1px solid rgba(74, 222, 128, 0.55);
+        border-radius: 18px;
+        background: #0f172a;
+        box-shadow: 0 20px 70px rgba(0, 0, 0, 0.55);
+      }
+
+      .sf-tutorial-player {
+        display: block;
+        width: 100%;
+        max-height: 60vh;
+        border-radius: 12px;
+        background: #000;
+      }
+
+      #sf-boot-shell {
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+        color: #e2e8f0;
+        background: #0b1020;
+        font-family: 'Inter', sans-serif;
+      }
+
+      .sf-boot-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 18px 20px;
+        border-bottom: 1px solid rgba(148, 163, 184, 0.16);
+        color: #f8fafc;
+      }
+
+      .sf-boot-header span {
+        color: #86efac;
+        font-weight: 700;
+      }
+
+      .sf-boot-main {
+        width: min(680px, 100%);
+        flex: 1;
+        margin: 0 auto;
+        padding: 28px 20px 100px;
+        box-sizing: border-box;
+      }
+
+      .sf-boot-main h1 {
+        margin: 0 0 22px;
+        color: #facc15;
+        font-size: 24px;
+      }
+
+      .sf-boot-card {
+        height: 82px;
+        margin-top: 14px;
+        border: 1px solid rgba(148, 163, 184, 0.16);
+        border-radius: 16px;
+        background: rgba(30, 41, 59, 0.45);
+      }
+
+      .sf-boot-nav {
+        position: fixed;
+        right: 0;
+        bottom: 0;
+        left: 0;
+        display: flex;
+        justify-content: space-around;
+        padding: 14px 8px calc(14px + env(safe-area-inset-bottom));
+        border-top: 1px solid rgba(148, 163, 184, 0.16);
+        background: rgba(15, 23, 42, 0.96);
+        color: #94a3b8;
+        font-size: 11px;
       }
 
       #sf-home-video-card {
@@ -1053,6 +1195,47 @@
 
     <!-- ── React root ──────────────────────────────────────────── -->
     <div id="root"></div>
+    <script>
+      /*
+       * Paint a minimal authenticated frame before the deferred React bundle
+       * finishes loading. This is intentionally synchronous and disposable:
+       * React replaces it on its first render, while the real query hooks
+       * hydrate from the same localStorage view cache.
+       */
+      (function () {
+        try {
+          var userId = localStorage.getItem('sf_user_id');
+          var token = localStorage.getItem('sf_token');
+          var hash = window.location.hash || '';
+          var route = hash.replace(/^#\/?/, '').split('?')[0] || 'home';
+          if (!userId || !token || route === 'login') return;
+
+          var profile = {};
+          var cache = JSON.parse(localStorage.getItem('sf_view_cache_v2') || '{}');
+          var profileEntry = cache['/api/user/' + userId];
+          if (profileEntry && profileEntry.data) profile = profileEntry.data;
+
+          var labels = {
+            home: 'VIP Lounge',
+            services: 'Instagram Services',
+            earn: 'Coins कमाएं',
+            orders: 'Order History',
+            referrals: 'Refer & Earn'
+          };
+          var title = labels[route] || labels.home;
+          var coins = Number(profile.coins);
+          var coinsText = isFinite(coins) ? String(coins) : '0';
+          document.getElementById('root').innerHTML =
+            '<div id="sf-boot-shell" aria-busy="true">' +
+              '<header class="sf-boot-header"><strong>⭐ Star Follower</strong><span>🪙 ' + coinsText + '</span></header>' +
+              '<main class="sf-boot-main"><h1>' + title + '</h1><div class="sf-boot-card"></div><div class="sf-boot-card"></div></main>' +
+              '<nav class="sf-boot-nav" aria-label="App navigation"><span>Home</span><span>Services</span><span>Earn</span><span>Orders</span><span>Refer</span></nav>' +
+            '</div>';
+        } catch (e) {
+          // The boot frame is best-effort; React remains the source of truth.
+        }
+      }());
+    </script>
 
     <script>
     (function () {
