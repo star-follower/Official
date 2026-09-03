@@ -45,12 +45,12 @@
               The screen is never left blank or frozen waiting on a
               slow round trip.
 
-           4. REQUEST QUEUE + 2s WATCHDOG (no parallel bursts) — API
+           4. REQUEST QUEUE + 15s WATCHDOG (no parallel bursts) — API
               calls (anything to /api/* or *.supabase.co) are funnelled
               through a small queue with a low concurrency cap instead
               of firing all at once on tab switch / app launch, and any
               single call is guaranteed to settle (resolve, from cache
-              if needed, or reject cleanly) within 2 seconds — never an
+              if needed, or reject cleanly) within 15 seconds — never an
               uncaught hang or an uncaught promise rejection.
       ═══════════════════════════════════════════════════════════════ -->
     <script>
@@ -263,7 +263,7 @@
            unmount / refetch). We always install our own controller and
            forward an abort from the caller's signal into it, so both
            can trigger an abort but our timeout always applies. */
-        var FETCH_TIMEOUT_MS = 2000; // 2s strict fallback window per spec
+        var FETCH_TIMEOUT_MS = 15000; // 15s network/auth window for Android WebViews
         var _nativeFetch = window.fetch ? window.fetch.bind(window) : null;
 
         function timedFetch(input, init, url) {
@@ -426,6 +426,87 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
     <script src="./supabase-api.js?v=20260818-base-path"></script>
+    <script>
+      /*
+       * AUTH BOOTSTRAP — equivalent to the missing AuthContext source.
+       *
+       * The custom app token and cached profile are intentionally read
+       * synchronously by the bundle/cache hooks. Supabase session recovery
+       * starts independently and can never hold the first React render.
+       * A stuck refresh is bounded to 10 seconds and is ignored safely.
+       */
+      (function () {
+        var AUTH_CACHE_KEY = 'sf_auth_session_v1';
+        var SUPABASE_AUTH_KEY = 'sb-lgqovwlmicjinwrteivn-auth-token';
+
+        function readJson(key) {
+          try {
+            var raw = localStorage.getItem(key);
+            return raw ? JSON.parse(raw) : null;
+          } catch (e) {
+            return null;
+          }
+        }
+
+        // Synchronous auth snapshot: never await getSession for first paint.
+        window.__sfCachedAuthSession =
+          readJson(AUTH_CACHE_KEY) ||
+          readJson(SUPABASE_AUTH_KEY) ||
+          null;
+
+        function cacheSession(session) {
+          if (!session) return;
+          try {
+            localStorage.setItem(AUTH_CACHE_KEY, JSON.stringify(session));
+          } catch (e) {}
+          window.__sfCachedAuthSession = session;
+        }
+
+        function resolveSessionInBackground() {
+          var client = window.__sfSupabaseClient;
+          if (!client || !client.auth || typeof client.auth.getSession !== 'function') {
+            return;
+          }
+
+          var timeoutId;
+          var timeout = new Promise(function (_, reject) {
+            timeoutId = setTimeout(function () {
+              var error = new Error('Supabase auth session timed out after 10000ms');
+              error.name = 'AuthSessionTimeoutError';
+              reject(error);
+            }, 10000);
+          });
+          var sessionPromise;
+          try {
+            sessionPromise = client.auth.getSession();
+          } catch (e) {
+            window.__sfAuthSessionReady = true;
+            return;
+          }
+
+          Promise.race([Promise.resolve(sessionPromise), timeout])
+            .then(function (result) {
+              clearTimeout(timeoutId);
+              var session = result && result.data && result.data.session;
+              if (session) cacheSession(session);
+              window.__sfAuthSessionReady = true;
+              window.dispatchEvent(new CustomEvent('sf-auth-session-ready'));
+            })
+            .catch(function () {
+              clearTimeout(timeoutId);
+              // Cached auth remains authoritative for the first render.
+              window.__sfAuthSessionReady = true;
+            });
+        }
+
+        // Defer only the reconciliation, not the app mount.
+        if (window.queueMicrotask) {
+          queueMicrotask(resolveSessionInBackground);
+        } else {
+          setTimeout(resolveSessionInBackground, 0);
+        }
+      }());
+    </script>
 
     <!-- ═══════════════════════════════════════════════════════════════
          ANDROID WEBVIEW / APK NATIVE SHARE — loaded before the app

@@ -13,8 +13,19 @@
   var VIEW_CACHE_KEY    = 'sf_view_cache_v2';
   var VIEW_CACHE_LIMIT  = 30;
 
-  // Supabase JS is loaded via CDN in index.html before this script
-  var db = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  // Supabase JS is loaded via CDN in index.html before this script.
+  // Keep session persistence explicit for Android WebViews: the app can
+  // render from its synchronous localStorage auth cache while Supabase
+  // refreshes its session in the background.
+  var db = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    auth: {
+      autoRefreshToken: true,
+      persistSession: true,
+      storage: window.localStorage,
+      detectSessionInUrl: false
+    }
+  });
+  window.__sfSupabaseClient = db;
 
   // ─── service name map (mirrors the bundle's IA array) ───────────────────────
   var SERVICE_NAMES = [
