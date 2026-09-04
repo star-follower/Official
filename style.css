@@ -1,0 +1,633 @@
+/* ══════════════════════════════════════════════════════════════
+   Star Follower — style.css
+   All UI styling, animations and layout, extracted verbatim from
+   the previous monolithic index.html (3 <style> blocks, in order).
+   ══════════════════════════════════════════════════════════════ */
+
+/* ── BLOCK 1 — App shell, settings modal, banners, toast, tutorial ── */
+      /*
+       * ═══════════════════════════════════════════════════════════════
+       * LAYER 1 — CSS DEFENSE (fires instantly when React paints)
+       * ═══════════════════════════════════════════════════════════════
+       *
+       * The compiled bundle's logout button has EXACTLY this class:
+       *   "text-muted-foreground hover:text-foreground p-1"
+       * We hide any such button inside <header> that hasn't been
+       * patched yet (no data-sf-done attribute). The instant React
+       * renders it, CSS hides it — user never sees the arrow icon.
+       * Our replacement (data-sf-done) stays visible always.
+       */
+
+      /* Hide the original logout button the moment it appears */
+      header button:not([data-sf-done])[class*="hover:text-foreground"][class*="p-1"] {
+        display: none !important;
+        pointer-events: none !important;
+        visibility: hidden !important;
+        width: 0 !important;
+        overflow: hidden !important;
+      }
+
+      /* Always show our patched gear button */
+      header button[data-sf-done] {
+        display: inline-flex !important;
+        visibility: visible !important;
+        pointer-events: auto !important;
+      }
+
+      /*
+       * Kill every floating / fixed-position settings button
+       * that may have existed in previous builds of this app.
+       */
+      #settings-btn,
+      #sf-settings-fab,
+      .floating-settings,
+      [class*="settings-btn"],
+      [class*="settings-fab"],
+      [id*="floating-settings"],
+      [id*="float-btn"] {
+        display: none !important;
+        pointer-events: none !important;
+      }
+
+      /* ── Full-screen Settings Modal ──────────────────────────── */
+      #sf-settings-modal {
+        display: none;
+        position: fixed;
+        inset: 0;
+        z-index: 999999;          /* on top of everything */
+        background: #0a0f1e;
+        flex-direction: column;
+        font-family: 'Inter', sans-serif;
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+      }
+      #sf-settings-modal.open {
+        display: flex;
+        animation: sf-fade-in 0.22s ease;
+      }
+      @keyframes sf-fade-in {
+        from { opacity: 0; transform: translateY(10px); }
+        to   { opacity: 1; transform: translateY(0); }
+      }
+
+      .sf-modal-inner {
+        width: 100%;
+        max-width: 480px;
+        margin: 0 auto;
+        min-height: 100dvh;
+        display: flex;
+        flex-direction: column;
+      }
+      .sf-modal-hdr {
+        position: sticky;
+        top: 0;
+        z-index: 2;
+        background: rgba(10,15,30,0.97);
+        backdrop-filter: blur(14px);
+        -webkit-backdrop-filter: blur(14px);
+        border-bottom: 1px solid rgba(201,168,76,0.18);
+        padding: 16px 18px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+      }
+      .sf-modal-hdr-title {
+        color: #c9a84c;
+        font-size: 17px;
+        font-weight: 700;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .sf-modal-hdr-close {
+        background: rgba(255,255,255,0.06);
+        border: 1px solid rgba(255,255,255,0.1);
+        color: #9ca3af;
+        width: 34px; height: 34px;
+        border-radius: 50%;
+        font-size: 17px;
+        cursor: pointer;
+        display: flex; align-items: center; justify-content: center;
+        line-height: 1;
+        transition: background 0.15s;
+      }
+      .sf-modal-hdr-close:active { background: rgba(255,255,255,0.12); }
+
+      .sf-modal-body {
+        padding: 22px 18px 48px;
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+      }
+
+      .sf-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        background: rgba(201,168,76,0.1);
+        border: 1px solid rgba(201,168,76,0.22);
+        color: #c9a84c;
+        font-size: 11px;
+        font-weight: 700;
+        padding: 5px 12px;
+        border-radius: 20px;
+        width: fit-content;
+      }
+
+      .sf-section {
+        background: rgba(255,255,255,0.035);
+        border: 1px solid rgba(201,168,76,0.1);
+        border-radius: 16px;
+        padding: 18px;
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+      }
+      .sf-section-title {
+        color: #c9a84c;
+        font-size: 13px;
+        font-weight: 700;
+        padding-bottom: 12px;
+        border-bottom: 1px solid rgba(201,168,76,0.12);
+        margin: 0;
+      }
+      .sf-policy-item { display: flex; flex-direction: column; gap: 3px; }
+      .sf-policy-item h4 { color: #e2e8f0; font-size: 12px; font-weight: 600; margin: 0; }
+      .sf-policy-item p  { color: #6b7280; font-size: 11.5px; line-height: 1.7; margin: 0; }
+
+      .sf-logout-btn {
+        width: 100%;
+        padding: 15px;
+        border: 1px solid rgba(239,68,68,0.4);
+        border-radius: 14px;
+        background: rgba(239,68,68,0.07);
+        color: #ef4444;
+        font-weight: 700;
+        font-size: 15px;
+        cursor: pointer;
+        font-family: 'Inter', sans-serif;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 9px;
+        transition: background 0.18s, border-color 0.18s;
+        margin-top: 4px;
+      }
+      .sf-logout-btn:active {
+        background: rgba(239,68,68,0.14);
+        border-color: rgba(239,68,68,0.55);
+      }
+      .sf-version {
+        color: #2d3748;
+        font-size: 10.5px;
+        text-align: center;
+        margin-top: 8px;
+      }
+
+      /* ── Disable long-press context menu on ALL elements ─────────── */
+      * {
+        -webkit-touch-callout: none !important;
+        -webkit-user-select:   none !important;
+        user-select:           none !important;
+      }
+      /* Allow text selection in text inputs and textareas */
+      input[type="text"], input[type="email"], input[type="password"],
+      input[type="number"], input[type="search"], input[type="url"],
+      input[type="tel"], textarea {
+        -webkit-user-select: text !important;
+        user-select:         text !important;
+      }
+
+      /* ── Device-ID auto-login banner ─────────────────────────── */
+      #sf-dil-wrap {
+        position: fixed;
+        top: 0; left: 0; right: 0;
+        z-index: 99980;
+        display: none;
+        justify-content: center;
+        padding: 10px 14px 0;
+        font-family: 'Inter', sans-serif;
+      }
+      #sf-dil-card {
+        width: 100%;
+        max-width: 480px;
+        background: linear-gradient(135deg, #1a2744 0%, #0f3460 100%);
+        border: 1.5px solid #c9a84c;
+        border-radius: 16px;
+        padding: 13px 15px;
+        display: flex;
+        align-items: center;
+        gap: 11px;
+        box-shadow: 0 4px 28px rgba(201,168,76,0.22);
+        animation: sf-slide-down 0.38s ease;
+      }
+      @keyframes sf-slide-down {
+        from { transform: translateY(-110%); opacity: 0; }
+        to   { transform: translateY(0);     opacity: 1; }
+      }
+      .sf-dil-av {
+        width: 40px; height: 40px; border-radius: 50%;
+        background: linear-gradient(135deg, #c9a84c, #f0d080);
+        display: flex; align-items: center; justify-content: center;
+        font-size: 17px; flex-shrink: 0;
+      }
+      .sf-dil-info { flex: 1; min-width: 0; }
+      .sf-dil-ttl  { color: #c9a84c; font-weight: 700; font-size: 11.5px; margin-bottom: 2px; }
+      .sf-dil-sub  { color: #cbd5e1; font-size: 10.5px; line-height: 1.5; }
+      .sf-dil-login-btn {
+        background: linear-gradient(135deg, #c9a84c, #f0d080);
+        color: #0f1523; border: none; border-radius: 10px;
+        padding: 8px 13px; font-weight: 700; font-size: 11.5px;
+        cursor: pointer; white-space: nowrap;
+        font-family: 'Inter', sans-serif; flex-shrink: 0;
+      }
+      .sf-dil-close-btn {
+        background: none; border: none; color: #4b5563;
+        font-size: 17px; cursor: pointer; flex-shrink: 0;
+        line-height: 1; padding: 0 2px;
+      }
+
+      /* ── Order completion toast ───────────────────────────────── */
+      #sf-order-toast {
+        position: fixed;
+        top: 70px; left: 50%;
+        transform: translateX(-50%);
+        z-index: 999998;
+        width: calc(100% - 28px);
+        max-width: 452px;
+        background: linear-gradient(135deg, #065f46, #047857);
+        border: 1px solid #34d399;
+        border-radius: 16px;
+        padding: 14px 17px;
+        display: none;
+        align-items: center;
+        gap: 12px;
+        box-shadow: 0 6px 28px rgba(52,211,153,0.28);
+        font-family: 'Inter', sans-serif;
+        cursor: pointer;
+      }
+      #sf-order-toast.show {
+        display: flex;
+        animation: sf-toast-in 0.32s ease;
+      }
+      @keyframes sf-toast-in {
+        from { transform: translateX(-50%) translateY(-14px); opacity: 0; }
+        to   { transform: translateX(-50%) translateY(0);     opacity: 1; }
+      }
+      #sf-order-toast .t-ico { font-size: 22px; flex-shrink: 0; }
+      #sf-order-toast .t-body { flex: 1; }
+      #sf-order-toast .t-head { color: #fff; font-weight: 700; font-size: 12.5px; line-height: 1.4; }
+      #sf-order-toast .t-sub  { color: #a7f3d0; font-size: 11px; margin-top: 2px; }
+
+      /* ── Requested UI cleanup and accessibility fixes ─────────────── */
+      .sf-header-coins {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 6px 11px;
+        border-radius: 999px;
+        color: #bbf7d0;
+        background: rgba(22, 163, 74, 0.18);
+        border: 1px solid rgba(74, 222, 128, 0.45);
+        font-size: 14px;
+        font-weight: 800;
+        line-height: 1;
+        white-space: nowrap;
+      }
+
+      body.sf-login form button[type="submit"] {
+        background: linear-gradient(135deg, #16a34a, #22c55e) !important;
+        color: #fff !important;
+        border-color: #4ade80 !important;
+        box-shadow: 0 0 20px rgba(34, 197, 94, 0.28) !important;
+      }
+
+      body.sf-home #root main,
+      body.sf-earn #root main {
+        background-image: none !important;
+      }
+
+      body.sf-home #root main [class*="bg-gradient"],
+      body.sf-earn #root main [class*="bg-gradient"] {
+        background-image: none !important;
+        background-color: transparent !important;
+      }
+
+      body.sf-home .sf-home-hero {
+        border: 0 !important;
+        box-shadow: none !important;
+      }
+
+      body.sf-home .sf-home-hero > div[class*="bg-gradient"] {
+        display: none !important;
+      }
+
+      body.sf-earn .sf-earn-main p.text-muted-foreground {
+        color: #22c55e !important;
+      }
+
+      body.sf-earn .sf-earn-choice-card {
+        background: linear-gradient(135deg, #064e3b, #047857) !important;
+        border: 2px solid #4ade80 !important;
+        box-shadow: 0 0 22px rgba(34, 197, 94, 0.22) !important;
+      }
+
+      body.sf-earn .sf-earn-choice-card,
+      body.sf-earn .sf-earn-choice-card * {
+        color: #bbf7d0 !important;
+      }
+
+      body.sf-earn .sf-earn-choice-card > div:last-child {
+        background: linear-gradient(90deg, #22c55e, #86efac) !important;
+        color: #052e16 !important;
+      }
+
+      body.sf-earn .sf-earn-choice-card > div:last-child * {
+        color: #052e16 !important;
+      }
+
+      /* Tutorial media is allowed only inside the React modal on Home/Earn.
+         Defensive hiding keeps it out of Services, Orders, and Refer. */
+      body.sf-services #root main video,
+      body.sf-orders #root main video,
+      body.sf-referrals #root main video,
+      body.sf-services #root main iframe[title*="Tutorial"],
+      body.sf-services #root main iframe[title*="tutorial"],
+      body.sf-services #root main iframe[title*="Video"],
+      body.sf-services #root main iframe[title*="video"],
+      body.sf-orders #root main iframe[title*="Tutorial"],
+      body.sf-orders #root main iframe[title*="tutorial"],
+      body.sf-orders #root main iframe[title*="Video"],
+      body.sf-orders #root main iframe[title*="video"],
+      body.sf-referrals #root main iframe[title*="Tutorial"],
+      body.sf-referrals #root main iframe[title*="tutorial"],
+      body.sf-referrals #root main iframe[title*="Video"],
+      body.sf-referrals #root main iframe[title*="video"] {
+        display: none !important;
+      }
+
+      .sf-tutorial-banner {
+        width: 100%;
+        border: 1px solid rgba(74, 222, 128, 0.4);
+        border-radius: 14px;
+        padding: 14px 16px;
+        color: #bbf7d0;
+        background: linear-gradient(135deg, rgba(20, 83, 45, 0.9), rgba(6, 78, 59, 0.82));
+        box-shadow: 0 8px 22px rgba(0, 0, 0, 0.16);
+        font-size: 12px;
+        line-height: 1.45;
+        text-align: left;
+        cursor: pointer;
+        transition: transform 0.16s ease, border-color 0.16s ease;
+      }
+
+      .sf-tutorial-banner:hover,
+      .sf-tutorial-banner:focus-visible {
+        border-color: #86efac;
+        outline: none;
+        transform: translateY(-1px);
+      }
+
+      .sf-tutorial-title {
+        display: block;
+        margin-bottom: 2px;
+        color: #fff;
+        font-size: 14px;
+        font-weight: 800;
+      }
+
+      .sf-tutorial-backdrop {
+        position: fixed;
+        inset: 0;
+        z-index: 10000;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 18px;
+        background: rgba(2, 6, 23, 0.82);
+        backdrop-filter: blur(4px);
+      }
+
+      .sf-tutorial-modal {
+        width: min(680px, 100%);
+        max-height: min(88vh, 620px);
+        overflow: auto;
+        padding: 16px;
+        border: 1px solid rgba(74, 222, 128, 0.55);
+        border-radius: 18px;
+        background: #0f172a;
+        box-shadow: 0 20px 70px rgba(0, 0, 0, 0.55);
+      }
+
+      .sf-tutorial-player {
+        display: block;
+        width: 100%;
+        max-height: 60vh;
+        border-radius: 12px;
+        background: #000;
+      }
+
+      #sf-boot-shell {
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+        color: #e2e8f0;
+        background: #0b1020;
+        font-family: 'Inter', sans-serif;
+      }
+
+      .sf-boot-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 18px 20px;
+        border-bottom: 1px solid rgba(148, 163, 184, 0.16);
+        color: #f8fafc;
+      }
+
+      .sf-boot-header span {
+        color: #86efac;
+        font-weight: 700;
+      }
+
+      .sf-boot-main {
+        width: min(680px, 100%);
+        flex: 1;
+        margin: 0 auto;
+        padding: 28px 20px 100px;
+        box-sizing: border-box;
+      }
+
+      .sf-boot-main h1 {
+        margin: 0 0 22px;
+        color: #facc15;
+        font-size: 24px;
+      }
+
+      .sf-boot-card {
+        height: 82px;
+        margin-top: 14px;
+        border: 1px solid rgba(148, 163, 184, 0.16);
+        border-radius: 16px;
+        background: rgba(30, 41, 59, 0.45);
+      }
+
+      .sf-boot-nav {
+        position: fixed;
+        right: 0;
+        bottom: 0;
+        left: 0;
+        display: flex;
+        justify-content: space-around;
+        padding: 14px 8px calc(14px + env(safe-area-inset-bottom));
+        border-top: 1px solid rgba(148, 163, 184, 0.16);
+        background: rgba(15, 23, 42, 0.96);
+        color: #94a3b8;
+        font-size: 11px;
+      }
+
+      #sf-home-video-card {
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
+        margin-bottom: 2px;
+        padding: 14px 16px;
+        color: #bbf7d0;
+        background: linear-gradient(135deg, rgba(20, 83, 45, 0.9), rgba(6, 78, 59, 0.82));
+        border: 1px solid rgba(74, 222, 128, 0.4);
+        border-radius: 14px;
+        box-shadow: 0 8px 22px rgba(0, 0, 0, 0.16);
+        font-size: 12px;
+        line-height: 1.45;
+        text-decoration: none;
+        transition: transform 0.16s ease, border-color 0.16s ease;
+      }
+
+      #sf-home-video-card:hover,
+      #sf-home-video-card:focus-visible {
+        border-color: #86efac;
+        outline: none;
+        transform: translateY(-1px);
+      }
+
+      #sf-home-video-card .sf-home-video-title {
+        margin-bottom: 2px;
+        color: #fff;
+        font-size: 14px;
+        font-weight: 800;
+      }
+
+      #root img,
+      #sf-apk-banner img {
+        -webkit-touch-callout: none;
+        user-select: none;
+        -webkit-user-select: none;
+      }
+
+/* ── BLOCK 2 — Admin tutorial-video row ─────────────────────────── */
+      /* ── Admin video upload row ─────────────────────────────────── */
+      .sf-vid-wrap {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        margin-top: 2px;
+      }
+      .sf-vid-row {
+        display: flex;
+        gap: 6px;
+        align-items: center;
+      }
+      .sf-vid-row input[type="text"] {
+        flex: 1;
+      }
+      .sf-vid-upload-btn {
+        background: linear-gradient(135deg, #1a2744, #0f3460);
+        border: 1px solid rgba(201,168,76,0.35);
+        color: #c9a84c;
+        font-family: 'Inter', sans-serif;
+        font-size: 11.5px;
+        font-weight: 700;
+        padding: 6px 11px;
+        border-radius: 8px;
+        cursor: pointer;
+        white-space: nowrap;
+        display: flex;
+        align-items: center;
+        gap: 5px;
+        transition: background 0.15s, border-color 0.15s;
+        flex-shrink: 0;
+      }
+      .sf-vid-upload-btn:hover {
+        background: linear-gradient(135deg, #213256, #0f3f7a);
+        border-color: rgba(201,168,76,0.6);
+      }
+      .sf-vid-upload-btn:disabled {
+        opacity: 0.55;
+        cursor: not-allowed;
+      }
+      .sf-vid-status {
+        font-size: 10.5px;
+        color: #6b7280;
+        line-height: 1.5;
+        min-height: 14px;
+      }
+      .sf-vid-status.ok   { color: #34d399; }
+      .sf-vid-status.err  { color: #f87171; }
+      .sf-vid-status.busy { color: #c9a84c; }
+
+      /* ── Admin warning banner ───────────────────────────────────── */
+      .sf-admin-warn {
+        background: rgba(245,158,11,0.1);
+        border: 1px solid rgba(245,158,11,0.3);
+        border-radius: 10px;
+        color: #fbbf24;
+        font-size: 11px;
+        padding: 10px 13px;
+        line-height: 1.6;
+        margin-top: 4px;
+      }
+
+/* ── BLOCK 3 — Tap responsiveness (Android 13/14/15 WebView) ────── */
+      /*
+       * ═══════════════════════════════════════════════════════════════
+       * TAP RESPONSIVENESS (Android 13/14/15 WebView)
+       * ───────────────────────────────────────────────────────────────
+       * - touch-action: manipulation removes the WebView's ~300 ms
+       *   double-tap-zoom wait, so a tab tap dispatches click instantly.
+       * - tap-highlight/user-select off stops the long-press + selection
+       *   gesture recognizers from delaying the click on the nav bar.
+       * - contain/backface hints keep the bottom nav on its own paint
+       *   layer, so swapping the view above it never repaints the bar.
+       * ═══════════════════════════════════════════════════════════════
+       */
+      html, body { -webkit-tap-highlight-color: transparent; }
+
+      a, button, [role="button"], [role="tab"], nav *, .sf-boot-nav * {
+        touch-action: manipulation;
+      }
+
+      nav, .sf-boot-nav {
+        -webkit-user-select: none;
+        user-select: none;
+        touch-action: manipulation;
+        will-change: transform;
+        transform: translateZ(0);
+        contain: layout paint style;
+      }
+
+      /* Route content: isolate layout/paint so mounting a new tab view
+         cannot force a full-document reflow behind the tap. */
+      #root > * > main, main {
+        contain: layout paint style;
+      }
+
+      /* No cross-fade/slide on route change — a transition on the view
+         container is what makes an instant swap look like a freeze. */
+      nav a, nav button, .sf-boot-nav span {
+        transition: color .12s linear, background-color .12s linear, opacity .12s linear;
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        * { animation-duration: .01ms !important; transition-duration: .01ms !important; }
+      }
