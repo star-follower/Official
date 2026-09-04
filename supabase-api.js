@@ -3,7 +3,7 @@
  * Intercepts all /api/* fetch calls and translates them into
  * direct Supabase database calls. Runs before the main bundle.
  *
- * v2.1 — Robust fallback for old RPC signatures (cpaLeadUrl / videoUrl)
+ * v2.2 — First-login coin sync + 15s global fetch timeout
  */
 (function () {
   'use strict';
@@ -13,16 +13,59 @@
   var VIEW_CACHE_KEY    = 'sf_view_cache_v2';
   var VIEW_CACHE_LIMIT  = 30;
 
+  // ─── global fetch timeout ────────────────────────────────────────────────────
+  // Captured before anything (Supabase client, our own overrides) touches
+  // window.fetch, so this is always the real network fetch.
+  var _rawFetch     = window.fetch.bind(window);
+  var API_TIMEOUT_MS = 15000; // 15s — modern Android WebView / flaky mobile data
+
+  // Wraps any fetch call with a 15s AbortController timeout. Used for both
+  // the Supabase client's internal requests (session/login/RPC calls) and our
+  // own direct SMM-panel calls, so a slow network degrades gracefully instead
+  // of hanging indefinitely or getting killed by the WebView.
+  function fetchWithTimeout(input, init) {
+    init = init || {};
+    var controller = new AbortController();
+    var timeoutId = setTimeout(function () {
+      controller.abort();
+    }, API_TIMEOUT_MS);
+
+    // If the caller already passed a signal, chain it so either can abort.
+    if (init.signal) {
+      if (init.signal.aborted) {
+        controller.abort();
+      } else {
+        init.signal.addEventListener('abort', function () {
+          controller.abort();
+        });
+      }
+    }
+
+    var mergedInit = Object.assign({}, init, { signal: controller.signal });
+
+    return _rawFetch(input, mergedInit).finally(function () {
+      clearTimeout(timeoutId);
+    });
+  }
+
   // Supabase JS is loaded via CDN in index.html before this script.
   // Keep session persistence explicit for Android WebViews: the app can
   // render from its synchronous localStorage auth cache while Supabase
   // refreshes its session in the background.
+  //
+  // global.fetch is set so EVERY Supabase call (auth, rpc, from().select())
+  // inherits the 15s timeout — including the login/session request itself,
+  // which is the one most likely to hang on a slow connection and crash the
+  // WebView's request queue.
   var db = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
     auth: {
       autoRefreshToken: true,
       persistSession: true,
       storage: window.localStorage,
       detectSessionInUrl: false
+    },
+    global: {
+      fetch: fetchWithTimeout
     }
   });
   window.__sfSupabaseClient = db;
@@ -144,6 +187,62 @@
     );
   }
 
+  // Shared post-auth sync: given the payload returned by sf_login / sf_recover,
+  // fetch the authoritative profile (sf_get_user) using the freshly issued
+  // token + userId, merge it in, and write it to localStorage SYNCHRONOUSLY
+  // before the response goes back to the UI.
+  //
+  // This is the fix for "coins show 0 until app restart": previously the
+  // bundle rendered straight off the login RPC's own payload (which can lag
+  // behind the true balance — e.g. right after account creation, or after a
+  // referral/coin adjustment), and the real number only ever showed up once
+  // the app reloaded and re-ran its normal /api/user/:id fetch. Doing that
+  // fetch here, inline, means the first response already carries the truth.
+  async function syncFreshProfile(data) {
+    data = data || {};
+    try {
+      var token  = data.token  || '';
+      var userId = data.userId || data.id || '';
+      if (!token || !userId) return data;
+
+      var freshRes = await db.rpc('sf_get_user', {
+        p_user_id: userId,
+        p_token:   token
+      });
+
+      if (!freshRes.error && freshRes.data && !freshRes.data.error) {
+        var fresh = freshRes.data;
+        fresh.totalOrders      = parseInt(fresh.totalOrders,      10) || 0;
+        fresh.successfulOrders = parseInt(fresh.successfulOrders, 10) || 0;
+        fresh.referrals        = parseInt(fresh.referrals,        10) || 0;
+        fresh.newCompleted     = Array.isArray(fresh.newCompleted) ? fresh.newCompleted : [];
+
+        // Fresh profile wins on every overlapping field (coins included),
+        // but we keep token/userId explicit in case sf_get_user omits them.
+        data = Object.assign({}, data, fresh, { token: token, userId: userId });
+      }
+    } catch (e) {
+      // Non-fatal — fall back to the login/recover RPC's own payload rather
+      // than failing auth over a profile-refresh hiccup.
+    }
+
+    // ── Synchronous localStorage write ──────────────────────────────────
+    // The bundle's synchronous boot render reads these keys before Supabase
+    // gets a chance to respond on next mount. Writing the authoritative
+    // profile here — before this function returns — means the very first
+    // render after login/signup already shows the real coin balance.
+    try {
+      if (data.userId) localStorage.setItem('sf_user_id', data.userId);
+      if (data.token)  localStorage.setItem('sf_token', data.token);
+      localStorage.setItem('sf_user_cache', JSON.stringify({
+        data:      data,
+        updatedAt: Date.now()
+      }));
+    } catch (e) {}
+
+    return data;
+  }
+
   // ─── route handlers ──────────────────────────────────────────────────────────
 
   async function handleLogin(body) {
@@ -156,16 +255,18 @@
     if (res.data && res.data.error) return jsonRes(res.data, 400);
 
     // Save credentials for device-ID auto-login overlay
-    if (res.data && !res.data.error) {
-      try {
-        localStorage.setItem('sf_saved_creds', JSON.stringify({
-          name:     (body.name || '').trim(),
-          password: body.password || '',
-          deviceId: body.deviceId || ''
-        }));
-      } catch (e) {}
-    }
-    return jsonRes(res.data);
+    try {
+      localStorage.setItem('sf_saved_creds', JSON.stringify({
+        name:     (body.name || '').trim(),
+        password: body.password || '',
+        deviceId: body.deviceId || ''
+      }));
+    } catch (e) {}
+
+    // Immediate coin/profile sync — see syncFreshProfile() above.
+    var data = await syncFreshProfile(res.data);
+
+    return jsonRes(data);
   }
 
   async function handleRecover(body) {
@@ -181,7 +282,11 @@
     });
     if (res.error) return errRes(res.error.message, 500);
     if (res.data && res.data.error) return jsonRes(res.data, 400);
-    return jsonRes(res.data);
+
+    // Same immediate sync on account-recovery login.
+    var data = await syncFreshProfile(res.data);
+
+    return jsonRes(data);
   }
 
   async function handleGetUser(userId, init) {
@@ -199,6 +304,17 @@
     d.successfulOrders = parseInt(d.successfulOrders, 10) || 0;
     d.referrals        = parseInt(d.referrals,        10) || 0;
     d.newCompleted     = Array.isArray(d.newCompleted) ? d.newCompleted : [];
+
+    // Keep the localStorage cache fresh on every explicit profile poll too,
+    // not just at login — cheap insurance against the same "stale until
+    // restart" symptom showing up elsewhere (e.g. after placing an order).
+    try {
+      localStorage.setItem('sf_user_cache', JSON.stringify({
+        data:      d,
+        updatedAt: Date.now()
+      }));
+    } catch (e) {}
+
     return jsonRes(d);
   }
 
@@ -392,7 +508,7 @@
 
       return jsonRes({ ok: true, status: newStatus, updated: true, message: 'Status synced from SMM panel' });
     } catch (e) {
-      // CORS or network error — return current DB status without failing
+      // CORS, network error, or timeout — return current DB status without failing
       return jsonRes({ ok: true, status: order.status, updated: false, message: 'SMM panel unreachable — showing saved status' });
     }
   }
@@ -883,7 +999,9 @@
 
   // ─── fetch override ──────────────────────────────────────────────────────────
 
-  var _realFetch = window.fetch.bind(window);
+  // All direct outbound calls this file makes to third-party SMM/offerwall
+  // endpoints go through the same 15s-timeout wrapper as the Supabase client.
+  var _realFetch = fetchWithTimeout;
 
   window.fetch = async function (input, init) {
     var url = (typeof input === 'string') ? input : (input && input.url ? input.url : '');
@@ -901,6 +1019,12 @@
         return response;
       } catch (err) {
         if (init && init.signal && init.signal.aborted) throw err;
+        if (err && err.name === 'AbortError') {
+          // 15s timeout tripped inside route() (Supabase or SMM panel call) —
+          // report as a clean, catchable error instead of an unhandled hang.
+          console.error('[StarFollower API] Request timed out after ' + API_TIMEOUT_MS + 'ms:', url);
+          return errRes('Request timed out. Please check your connection and try again.', 408);
+        }
         console.error('[StarFollower API]', err);
         return errRes('Internal error: ' + err.message, 500);
       } finally {
@@ -914,5 +1038,5 @@
     return _realFetch(input, init);
   };
 
-  console.log('[Star Follower] Supabase API layer v2.1 loaded ✓');
+  console.log('[Star Follower] Supabase API layer v2.2 loaded ✓ (15s timeout, first-login coin sync)');
 })();

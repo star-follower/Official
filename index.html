@@ -161,31 +161,73 @@
            show last-known coins/orders/services instantly instead of
            a blank loading state, even before any network call lands. */
         var CACHE_KEY = 'sf_api_cache_v1';
+        var VIEW_CACHE_KEY = 'sf_view_cache_v2';
         var CACHE_MAX_ENTRIES = 40;
 
+        /* ── SCHEDULER ────────────────────────────────────────────────
+           One shared idle scheduler for every deferred/coalesced job in
+           this page (cache flushes, MutationObserver reactions, DOM
+           patches). Keeping this work OFF the tap -> paint path is what
+           makes bottom-nav tab switches feel instant on Android 13+. */
+        var idle = window.requestIdleCallback
+          ? function (fn) { return window.requestIdleCallback(fn, { timeout: 400 }); }
+          : function (fn) { return setTimeout(fn, 32); };
+        var raf = window.requestAnimationFrame
+          ? window.requestAnimationFrame.bind(window)
+          : function (fn) { return setTimeout(fn, 16); };
+        window.__sfIdle = idle;
+        /* coalesce(fn) -> a function that runs fn at most once per frame,
+           after paint. Use it for any DOM-observing callback. */
+        window.__sfCoalesce = function (fn) {
+          var queued = false;
+          return function () {
+            if (queued) return;
+            queued = true;
+            raf(function () { idle(function () { queued = false; try { fn(); } catch (e) {} }); });
+          };
+        };
+
+        /* ── PERSISTENT API RESPONSE CACHE (offline-first render) ──────
+           localStorage is SYNCHRONOUS. The previous version parsed and
+           re-serialized the whole cache blob on EVERY fetch call, and a
+           tab mount fires several calls at once — that main-thread cost
+           is exactly what showed up as "tap a tab, screen freezes for a
+           moment". Now the blob is parsed ONCE into memory and written
+           back at most once per idle slice. */
+        var _memStore = null;
+        var _flushPending = false;
+
         function readCacheStore() {
+          if (_memStore) return _memStore;
           try {
             var raw = window.localStorage.getItem(CACHE_KEY);
-            return raw ? JSON.parse(raw) : {};
+            _memStore = raw ? JSON.parse(raw) : {};
           } catch (e) {
-            return {};
+            _memStore = {};
           }
+          return _memStore;
         }
 
-        function writeCacheStore(store) {
-          try {
-            var keys = Object.keys(store);
-            if (keys.length > CACHE_MAX_ENTRIES) {
-              keys.sort(function (a, b) { return (store[a].ts || 0) - (store[b].ts || 0); });
-              while (keys.length > CACHE_MAX_ENTRIES) {
-                delete store[keys.shift()];
+        function scheduleFlush() {
+          if (_flushPending) return;
+          _flushPending = true;
+          idle(function () {
+            _flushPending = false;
+            var store = _memStore || {};
+            try {
+              var keys = Object.keys(store);
+              if (keys.length > CACHE_MAX_ENTRIES) {
+                keys.sort(function (a, b) { return (store[a].ts || 0) - (store[b].ts || 0); });
+                while (keys.length > CACHE_MAX_ENTRIES) {
+                  delete store[keys.shift()];
+                }
               }
+              window.localStorage.setItem(CACHE_KEY, JSON.stringify(store));
+            } catch (e) {
+              /* Quota or serialization issue — never let storage affect
+                 the live response or the current frame. */
             }
-            window.localStorage.setItem(CACHE_KEY, JSON.stringify(store));
-          } catch (e) {
-            /* Quota or serialization issue — skip caching this round,
-               never let a storage failure affect the live response. */
-          }
+          });
         }
 
         function cacheKey(url) { return 'GET ' + url; }
@@ -195,11 +237,81 @@
           return store[cacheKey(url)] || null;
         }
 
+        /* ── VIEW CACHE (React Query hydration, read synchronously) ────
+           Parsed once into memory, mirrored from API responses in idle
+           time. window.__sfReadViewCache is what the patched query hooks
+           in the app bundle call for their initialData, so the first
+           paint of every tab has real data without any network wait. */
+        var _viewStore = null;
+        var _viewFlushPending = false;
+
+        function readViewStore() {
+          if (_viewStore) return _viewStore;
+          try {
+            var raw = window.localStorage.getItem(VIEW_CACHE_KEY);
+            _viewStore = raw ? JSON.parse(raw) : {};
+          } catch (e) {
+            _viewStore = {};
+          }
+          return _viewStore;
+        }
+
+        function scheduleViewFlush() {
+          if (_viewFlushPending) return;
+          _viewFlushPending = true;
+          idle(function () {
+            _viewFlushPending = false;
+            try {
+              window.localStorage.setItem(VIEW_CACHE_KEY, JSON.stringify(_viewStore || {}));
+            } catch (e) {}
+          });
+        }
+
+        function apiPathOf(url) {
+          var s = String(url || '');
+          var idx = s.indexOf('/api/');
+          if (idx === -1) return '';
+          return s.slice(idx).split('?')[0];
+        }
+
+        function writeViewCache(url, bodyText) {
+          var path = apiPathOf(url);
+          if (!path) return;
+          try {
+            var data = JSON.parse(bodyText);
+            var store = readViewStore();
+            store[path] = { data: data, updatedAt: Date.now() };
+            scheduleViewFlush();
+          } catch (e) {}
+        }
+
+        window.__sfReadViewCache = function (path, fallback) {
+          try {
+            var entry = readViewStore()[String(path || '').split('?')[0]];
+            if (entry && entry.data !== undefined && entry.data !== null) {
+              return { data: entry.data, updatedAt: entry.updatedAt || 0 };
+            }
+          } catch (e) {}
+          return { data: fallback, updatedAt: 0 };
+        };
+
+        /* Dedupe repeated credit-sync callbacks (WebViews fire them more
+           than once). In-memory only — no storage on the hot path. */
+        var _syncStamps = {};
+        window.__sfCanSync = function (key, windowMs) {
+          var now = Date.now();
+          var last = _syncStamps[key] || 0;
+          if (now - last < (windowMs || 15000)) return false;
+          _syncStamps[key] = now;
+          return true;
+        };
+
         function setCachedEntry(url, entry) {
           var store = readCacheStore();
           entry.ts = Date.now();
           store[cacheKey(url)] = entry;
-          writeCacheStore(store);
+          scheduleFlush();
+          writeViewCache(url, entry.body);
         }
 
         function buildResponseFromCache(entry) {
@@ -314,12 +426,17 @@
             function realRequest() {
               return timedFetch(input, init, url).then(function (res) {
                 if (api && method === 'GET' && res && res.ok) {
+                  // Clone now (cheap), but read + store in idle time so
+                  // serialization never lands inside a tap/paint frame.
                   try {
-                    res.clone().text().then(function (bodyText) {
-                      var headerObj = {};
-                      try { res.headers.forEach(function (v, k) { headerObj[k] = v; }); } catch (e) {}
-                      setCachedEntry(url, { status: res.status, headers: headerObj, body: bodyText });
-                    }).catch(function () {});
+                    var _copy = res.clone();
+                    idle(function () {
+                      _copy.text().then(function (bodyText) {
+                        var headerObj = {};
+                        try { res.headers.forEach(function (v, k) { headerObj[k] = v; }); } catch (e) {}
+                        setCachedEntry(url, { status: res.status, headers: headerObj, body: bodyText });
+                      }).catch(function () {});
+                    });
                   } catch (e) {}
                 }
                 return res;
@@ -344,7 +461,10 @@
               // quietly in the background through the queue. Any
               // failure of the background refresh is swallowed — the
               // UI already has data on screen from the cache.
-              enqueueApi(realRequest).catch(function () {});
+              // Background refresh is scheduled for idle time so it can
+              // never compete with the render of the tab the user just
+              // opened. The cached response resolves immediately.
+              idle(function () { enqueueApi(realRequest).catch(function () {}); });
               return Promise.resolve(buildResponseFromCache(cached));
             }
 
@@ -613,7 +733,7 @@
          */
         .replace(
           'function Pl({component:n,...r}){const[i,s]=pf(),u=ka();return g.useEffect(()=>{!u&&i!=="/login"&&s("/login")},[u,i,s]),u?v.jsx(KA,{children:v.jsx(n,{...r})}):null}function hO(){return v.jsxs(lS,{children:[v.jsx(Na,{path:"/login",component:FA}),v.jsx(Na,{path:"/",component:()=>v.jsx(Pl,{component:WA})}),v.jsx(Na,{path:"/services",component:()=>v.jsx(Pl,{component:tO})}),v.jsx(Na,{path:"/earn",component:()=>v.jsx(Pl,{component:rO})}),v.jsx(Na,{path:"/orders",component:()=>v.jsx(Pl,{component:iO})}),v.jsx(Na,{path:"/referrals",component:()=>v.jsx(Pl,{component:fO})}),v.jsx(Na,{children:v.jsx("div",{className:"p-8 text-center",children:"Not Found"})})]})}',
-          'function Pl(){const[n,r]=pf(),i=ka(),[s,u]=g.useState(n),[f,d]=g.useTransition();g.useEffect(()=>{if(!i&&n!=="/login"){r("/login");return}d(()=>u(n))},[i,n,r]);const h=s==="/"?WA:s==="/services"?tO:s==="/earn"?rO:s==="/orders"?iO:s==="/referrals"?fO:null;return i?v.jsx(KA,{children:h?v.jsx(h,{}):v.jsx("div",{className:"p-8 text-center",children:"Not Found"})}):null}function hO(){return v.jsxs(lS,{children:[v.jsx(Na,{path:"/login",component:FA}),v.jsx(Na,{component:Pl})]})}'
+          'function Pl(){const[n,r]=pf(),i=ka();g.useEffect(()=>{!i&&n!=="/login"&&r("/login")},[i,n,r]);const h=n==="/"?WA:n==="/services"?tO:n==="/earn"?rO:n==="/orders"?iO:n==="/referrals"?fO:null;return i?v.jsx(KA,{children:h?v.jsx(h,{}):v.jsx("div",{className:"p-8 text-center",children:"Not Found"})}):null}function hO(){return v.jsxs(lS,{children:[v.jsx(Na,{path:"/login",component:FA}),v.jsx(Na,{component:Pl})]})}'
         )
         /*
          * CPA/offer callbacks can arrive more than once from Android
@@ -1394,22 +1514,27 @@
         parent.replaceChild(gear, btn);
       }
 
-      /* Layer 3a — poll every 300 ms for the first 8 s, then every 2 s */
-      var _fast = setInterval(patchLogout, 300);
+      /* Layer 3a — a short startup poll only. A tab switch replaces the
+         whole view subtree, so a 300 ms querySelector poll used to land
+         right on top of the new render; 1 s for 8 s then 3 s is plenty
+         and costs nothing perceptible. Paused while the app is hidden. */
+      var _pollLogout = function () { if (!document.hidden) patchLogout(); };
+      var _fast = setInterval(_pollLogout, 1000);
       setTimeout(function () {
         clearInterval(_fast);
-        setInterval(patchLogout, 2000);
+        setInterval(_pollLogout, 3000);
       }, 8000);
 
-      /* Layer 3b — MutationObserver (fires synchronously on any DOM change) */
-      new MutationObserver(function (mutations) {
-        for (var i = 0; i < mutations.length; i++) {
-          var added = mutations[i].addedNodes;
-          for (var j = 0; j < added.length; j++) {
-            if (added[j].nodeType === 1) { patchLogout(); break; }
-          }
-        }
-      }).observe(document.body, { childList: true, subtree: true });
+      /* Layer 3b — MutationObserver, COALESCED. React inserting a whole
+         tab view fires hundreds of mutation records; running a DOM query
+         per record blocked the main thread on every tab tap. Now the
+         observer only flags work and patchLogout() runs once, after the
+         next paint, in idle time. */
+      var _schedulePatchLogout = window.__sfCoalesce
+        ? window.__sfCoalesce(patchLogout)
+        : function () { setTimeout(patchLogout, 32); };
+      new MutationObserver(_schedulePatchLogout)
+        .observe(document.body, { childList: true, subtree: true });
 
       /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
          DIRECT APK DOWNLOAD BANNER
@@ -1761,26 +1886,33 @@
       // Belt-and-suspenders: if an offerwall iframe reaches the DOM
       // (e.g. React set src before our createElement patch ran),
       // remove it and open the URL externally.
+      // Cheap record scan (tag check only, no querySelectorAll per
+      // record) + one coalesced sweep after paint. Previously every
+      // added node during a route render triggered a subtree query,
+      // which is what made tab switches stutter.
+      function sweepOfferwallIframes() {
+        var iframes = document.querySelectorAll('iframe');
+        for (var i = 0; i < iframes.length; i++) {
+          var ifr = iframes[i];
+          var src = ifr.src || ifr.getAttribute('src') || '';
+          if (isOfferwallUrl(src)) {
+            if (ifr.parentNode) ifr.parentNode.removeChild(ifr);
+            openExternal(src);
+          }
+        }
+      }
+      var _scheduleSweep = window.__sfCoalesce
+        ? window.__sfCoalesce(sweepOfferwallIframes)
+        : function () { setTimeout(sweepOfferwallIframes, 32); };
+
       new MutationObserver(function (mutations) {
-        mutations.forEach(function (m) {
-          m.addedNodes.forEach(function (node) {
-            if (node.nodeType !== 1) return;
-            // Check the node itself and all descendant iframes
-            var iframes = [];
-            if (node.tagName === 'IFRAME') iframes.push(node);
-            iframes = iframes.concat(Array.prototype.slice.call(
-              node.querySelectorAll ? node.querySelectorAll('iframe') : []
-            ));
-            iframes.forEach(function (ifr) {
-              var src = ifr.src || ifr.getAttribute('src') || '';
-              if (isOfferwallUrl(src)) {
-                // Remove from DOM before it loads → no session block
-                if (ifr.parentNode) ifr.parentNode.removeChild(ifr);
-                openExternal(src);
-              }
-            });
-          });
-        });
+        for (var i = 0; i < mutations.length; i++) {
+          var added = mutations[i].addedNodes;
+          for (var j = 0; j < added.length; j++) {
+            var node = added[j];
+            if (node.nodeType === 1) { _scheduleSweep(); return; }
+          }
+        }
       }).observe(document.documentElement, { childList: true, subtree: true });
 
       // ── LAYER 3: click capture on <a> tags ────────────────────────
@@ -2080,16 +2212,24 @@
       }
 
       // ── Watch for the admin portal to mount ────────────────────────────
-      var _adminObserver = new MutationObserver(function () {
+      // Coalesced: one check after paint per burst of DOM changes, and
+      // it disconnects itself once the field is patched so it stops
+      // costing anything on later tab switches.
+      var _adminObserver;
+      var _scheduleAdminPatch = function () {
         patchAdminVideoField();
-      });
+        if (_patchedVideoField && _adminObserver) _adminObserver.disconnect();
+      };
+      if (window.__sfCoalesce) _scheduleAdminPatch = window.__sfCoalesce(_scheduleAdminPatch);
+      _adminObserver = new MutationObserver(_scheduleAdminPatch);
       _adminObserver.observe(document.body, { childList: true, subtree: true });
 
       // Also poll briefly at startup in case the portal is already rendered
       var _adminPollTimer = setInterval(function () {
+        if (document.hidden) return;
         patchAdminVideoField();
         if (_patchedVideoField) clearInterval(_adminPollTimer);
-      }, 500);
+      }, 1000);
       setTimeout(function () { clearInterval(_adminPollTimer); }, 30000);
 
       // Intercept /api/services response to capture the secondary offer URL.
@@ -2196,6 +2336,7 @@
 
       // Poll to inject Choice 2 once data is available and Earn page is rendered
       var _earnPollTimer = setInterval(function () {
+        if (document.hidden) return;
         if (!_cachedCpaUrl   && window.__sfCpaLeadUrl)  _cachedCpaUrl   = window.__sfCpaLeadUrl;
 
         if (_cachedCpaUrl)    injectChoice2Card(_cachedCpaUrl);
@@ -2206,6 +2347,51 @@
 
     }());
     </script>
+
+    <style>
+      /*
+       * ═══════════════════════════════════════════════════════════════
+       * TAP RESPONSIVENESS (Android 13/14/15 WebView)
+       * ───────────────────────────────────────────────────────────────
+       * - touch-action: manipulation removes the WebView's ~300 ms
+       *   double-tap-zoom wait, so a tab tap dispatches click instantly.
+       * - tap-highlight/user-select off stops the long-press + selection
+       *   gesture recognizers from delaying the click on the nav bar.
+       * - contain/backface hints keep the bottom nav on its own paint
+       *   layer, so swapping the view above it never repaints the bar.
+       * ═══════════════════════════════════════════════════════════════
+       */
+      html, body { -webkit-tap-highlight-color: transparent; }
+
+      a, button, [role="button"], [role="tab"], nav *, .sf-boot-nav * {
+        touch-action: manipulation;
+      }
+
+      nav, .sf-boot-nav {
+        -webkit-user-select: none;
+        user-select: none;
+        touch-action: manipulation;
+        will-change: transform;
+        transform: translateZ(0);
+        contain: layout paint style;
+      }
+
+      /* Route content: isolate layout/paint so mounting a new tab view
+         cannot force a full-document reflow behind the tap. */
+      #root > * > main, main {
+        contain: layout paint style;
+      }
+
+      /* No cross-fade/slide on route change — a transition on the view
+         container is what makes an instant swap look like a freeze. */
+      nav a, nav button, .sf-boot-nav span {
+        transition: color .12s linear, background-color .12s linear, opacity .12s linear;
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        * { animation-duration: .01ms !important; transition-duration: .01ms !important; }
+      }
+    </style>
 
 
   </body>
