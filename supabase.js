@@ -403,6 +403,16 @@
         var closeBt = document.getElementById('sf-dil-close-btn');
         var creds   = null;
 
+        /* Safe login check — never assumes a bare `sfLoggedIn` identifier exists. */
+        function sfLoggedIn() {
+          if (typeof window.sfIsLoggedIn === 'function') return window.sfIsLoggedIn();
+          var v = false;
+          try { v = !!(localStorage.getItem('sf_user_id') && localStorage.getItem('sf_token')); } catch (e) {}
+          window.sfLoggedIn = v;
+          return v;
+        }
+
+
         try { creds = JSON.parse(localStorage.getItem('sf_saved_creds') || 'null'); } catch (e) {}
         if (!creds || !creds.name || !creds.password) return;
 

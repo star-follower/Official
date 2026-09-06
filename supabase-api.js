@@ -5,6 +5,44 @@
  *
  * v2.2 — First-login coin sync + 15s global fetch timeout
  */
+
+/* ══════════════════════════════════════════════════════════════════════════
+   GLOBAL LOGIN STATE — declared before ANY other code runs so that no module
+   can throw "sfLoggedIn is not defined".
+   ══════════════════════════════════════════════════════════════════════════ */
+window.sfLoggedIn = window.sfLoggedIn || false;
+
+(function () {
+  'use strict';
+
+  function readAuth() {
+    try {
+      return !!(localStorage.getItem('sf_user_id') && localStorage.getItem('sf_token'));
+    } catch (e) { return false; }
+  }
+
+  /* Re-reads storage, refreshes the global flag and returns it. */
+  window.sfIsLoggedIn = function () {
+    window.sfLoggedIn = readAuth();
+    return window.sfLoggedIn;
+  };
+
+  /* Explicit setter used on login / logout transitions. */
+  window.sfSetLoggedIn = function (value) {
+    window.sfLoggedIn = !!value;
+    try {
+      window.dispatchEvent(new CustomEvent('sf-login-state', { detail: window.sfLoggedIn }));
+    } catch (e) {}
+    return window.sfLoggedIn;
+  };
+
+  /* Initial sync + cross-tab sync. */
+  window.sfIsLoggedIn();
+  window.addEventListener('storage', function (e) {
+    if (!e || !e.key || e.key === 'sf_user_id' || e.key === 'sf_token') window.sfIsLoggedIn();
+  });
+})();
+
 (function () {
   'use strict';
 
@@ -234,6 +272,8 @@
     try {
       if (data.userId) localStorage.setItem('sf_user_id', data.userId);
       if (data.token)  localStorage.setItem('sf_token', data.token);
+      /* login state transition → keep the global flag in sync */
+      if (typeof window.sfIsLoggedIn === 'function') window.sfIsLoggedIn();
       localStorage.setItem('sf_user_cache', JSON.stringify({
         data:      data,
         updatedAt: Date.now()

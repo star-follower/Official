@@ -29,8 +29,34 @@
     <link rel="manifest" href="./manifest.json" />
     <meta name="theme-color" content="#0f1523" />
     <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous">
+    <!-- Font preloads MUST carry crossorigin="anonymous", otherwise the browser
+         re-fetches the font and logs a CORS preload warning. The script below
+         enforces that on every font preload, including ones added later. -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script>
+      /* Any font preload injected later (by the app bundle) also gets
+         crossorigin="anonymous" so no CORS preload warnings appear. */
+      (function () {
+        function fix(link) {
+          if (link && link.rel === 'preload' && link.as === 'font' &&
+              !link.getAttribute('crossorigin')) {
+            link.setAttribute('crossorigin', 'anonymous');
+          }
+        }
+        document.querySelectorAll('link[rel="preload"][as="font"]').forEach(fix);
+        try {
+          new MutationObserver(function (recs) {
+            recs.forEach(function (r) {
+              Array.prototype.forEach.call(r.addedNodes, function (n) {
+                if (n && n.tagName === 'LINK') fix(n);
+              });
+            });
+          }).observe(document.documentElement, { childList: true, subtree: true });
+        } catch (e) {}
+      })();
+    </script>
+
 
     <!-- ── Local styles (all UI/animation/layout CSS) ─────────── -->
     <link rel="stylesheet" href="./style.css" />

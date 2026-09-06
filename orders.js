@@ -4,8 +4,13 @@
 (function () {
   'use strict';
 
+  /* Safe login check — never assumes a bare `sfLoggedIn` identifier exists. */
   function sfLoggedIn() {
-    return !!(localStorage.getItem('sf_user_id') && localStorage.getItem('sf_token'));
+    if (typeof window.sfIsLoggedIn === 'function') return window.sfIsLoggedIn();
+    var v = false;
+    try { v = !!(localStorage.getItem('sf_user_id') && localStorage.getItem('sf_token')); } catch (e) {}
+    window.sfLoggedIn = v;
+    return v;
   }
 
   function initOrderToast() {
