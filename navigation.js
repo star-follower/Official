@@ -101,11 +101,17 @@
 
           history.pushState = function () {
             var ret = _origPushState.apply(history, arguments);
+             try {
+               if (document.body) document.body.style.pointerEvents = 'auto';
+             } catch (e) {}
             try { window.dispatchEvent(new Event('locationchange')); } catch (e) {}
             return ret;
           };
           history.replaceState = function () {
             var ret = _origReplaceState.apply(history, arguments);
+             try {
+               if (document.body) document.body.style.pointerEvents = 'auto';
+             } catch (e) {}
             try { window.dispatchEvent(new Event('locationchange')); } catch (e) {}
             return ret;
           };
@@ -115,9 +121,120 @@
              the 'locationchange' event existing. */
         }
 
+  /* Modal history is isolated from route history. Every modal gets one
+     same-URL history entry so Android Back closes the modal first instead of
+     leaving a transparent overlay above the route. */
+  var sfModalHistoryId = null;
+  var sfModalHistorySerial = 0;
+  window.__sfPushModalState = function (modal) {
+    try {
+      if (!modal) return false;
+      var modalId = modal.id || modal.getAttribute('data-modal-id');
+      if (!modalId) {
+        modalId = 'sf-modal-' + (++sfModalHistorySerial);
+        modal.id = modalId;
+      }
+      if (sfModalHistoryId === modalId &&
+          history.state && history.state.modalOpen === true) {
+        return false;
+      }
+      history.pushState({ modalOpen: true, modalId: modalId }, '', location.href);
+      sfModalHistoryId = modalId;
+      return true;
+    } catch (e) {
+      return false;
+    }
+  };
+
+  function getVisibleOpenModals() {
+    var selector = [
+      '.modal.open',
+      '.overlay.active',
+      '[data-modal].visible',
+      '.popup-active',
+      '#sf-settings-modal.open',
+      '[aria-modal="true"]',
+      '[data-radix-dialog-overlay]',
+      '[data-radix-dialog-content]',
+      '[class*="fixed"][class*="inset-0"]',
+      'iframe[title="Earn Coins"]'
+    ].join(',');
+    var nodes = [];
+    try {
+      document.querySelectorAll(selector).forEach(function (node) {
+        var styles = window.getComputedStyle ? window.getComputedStyle(node) : null;
+        if (!styles || (styles.display !== 'none' && styles.visibility !== 'hidden')) {
+          nodes.push(node);
+        }
+      });
+    } catch (e) {}
+    return nodes;
+  }
+
+  function hideOpenModalsOnBack() {
+    var openModals = [];
+    try {
+      document.querySelectorAll([
+        '.modal.open',
+        '.overlay.active',
+        '[data-modal].visible',
+        '.popup-active',
+        '#sf-settings-modal.open',
+        '[aria-modal="true"]',
+        '[data-radix-dialog-overlay]',
+        '[data-radix-dialog-content]',
+        '[class*="fixed"][class*="inset-0"]',
+        'iframe[title="Earn Coins"]'
+      ].join(',')).forEach(function (modal) {
+        if (openModals.indexOf(modal) === -1) openModals.push(modal);
+      });
+    } catch (e) {}
+    openModals.forEach(function (modal) {
+      try {
+        modal.classList.remove('open', 'active', 'visible', 'popup-active');
+        modal.style.setProperty('display', 'none', 'important');
+      } catch (e) {}
+    });
+    sfModalHistoryId = null;
+    return openModals.length > 0;
+  }
+
+  function observeModalOpenings() {
+    var lastOpenId = null;
+    function scan() {
+      var openModals = getVisibleOpenModals();
+      if (!openModals.length) {
+        lastOpenId = null;
+        return;
+      }
+      var modal = openModals[openModals.length - 1];
+      var modalId = modal.id || modal.getAttribute('data-modal-id') ||
+        (modal.className && String(modal.className).slice(0, 160));
+      if (modalId !== lastOpenId) {
+        lastOpenId = modalId;
+        window.__sfPushModalState(modal);
+      }
+    }
+    var scheduleScan = window.__sfCoalesce
+      ? window.__sfCoalesce(scan)
+      : function () { setTimeout(scan, 0); };
+    var observer = new MutationObserver(function () {
+      scheduleScan();
+    });
+    if (document.documentElement) {
+      observer.observe(document.documentElement, {
+        childList: true,
+        subtree: true,
+        attributes: true,
+        attributeFilter: ['class', 'style', 'aria-hidden', 'data-state']
+      });
+    }
+    scan();
+  }
+
   /* Android hardware back dispatches popstate in some WebViews and
-     hashchange in others. This handler never cancels the event, never calls
-     history.back(), and resets interaction state before the router runs. */
+     hashchange in others. These handlers never cancel the event, never call
+     history.back(), and reset interaction state before the router runs. */
   function forceResetBackUi() {
     try {
       if (document.documentElement) {
@@ -153,6 +270,18 @@
   }
   window.addEventListener('popstate', forceResetBackUi, false);
   window.addEventListener('hashchange', forceResetBackUi, false);
+  window.addEventListener('popstate', function () {
+    if (document.body) {
+      document.body.style.pointerEvents = 'auto';
+      document.body.style.overflow = 'auto';
+    }
+    hideOpenModalsOnBack();
+  }, false);
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', observeModalOpenings, { once: true });
+  } else {
+    setTimeout(observeModalOpenings, 0);
+  }
 
         /* ── SCHEDULER ────────────────────────────────────────────────
            One shared idle scheduler for every deferred/coalesced job in
@@ -412,14 +541,10 @@
          if (!sfModal) return;
          sfModal.classList.add('open');
          if (!settingsHistoryPushed) {
-           try {
-             history.pushState(
-               Object.assign({}, history.state || {}, { sfSettings: true }),
-               '',
-               window.location.href
-             );
-             settingsHistoryPushed = true;
-           } catch (e) {}
+           settingsHistoryPushed = !!(
+             window.__sfPushModalState &&
+             window.__sfPushModalState(sfModal)
+           );
          }
        }
        function closeSettings(fromPopState) {
