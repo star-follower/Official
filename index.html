@@ -1,6 +1,37 @@
 <!DOCTYPE html>
 <html lang="en">
   <head>
+    <script>
+      // Global touch unblocker
+      window.addEventListener('DOMContentLoaded', function() {
+        document.body.style.pointerEvents = 'auto';
+        document.documentElement.style.pointerEvents = 'auto';
+      });
+
+      // Prevent unhandled promise rejections from locking the main UI thread
+      window.addEventListener('unhandledrejection', function(e) {
+        e.preventDefault();
+        if (document.body) document.body.style.pointerEvents = 'auto';
+      });
+
+      // Safety interval to ensure pointer events are NEVER disabled longer than 100ms
+      setInterval(function() {
+        if (document.body && document.body.style.pointerEvents === 'none') {
+          document.body.style.pointerEvents = 'auto';
+        }
+        document.querySelectorAll([
+          'body > [class*="backdrop"]',
+          'body > [class*="overlay"]',
+          '#root > [class*="backdrop"]',
+          '#root > [class*="overlay"]',
+          '[data-radix-dialog-overlay]'
+        ].join(',')).forEach(function(overlay) {
+          if (overlay && overlay.style.pointerEvents === 'none') {
+            overlay.style.pointerEvents = 'auto';
+          }
+        });
+      }, 100);
+    </script>
     <!-- Global site tag (gtag.js) - Google Analytics -->
     <script async src="https://www.googletagmanager.com/gtag/js?id=G-N7N1172PV1"></script>
     <script>
