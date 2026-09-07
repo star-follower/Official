@@ -32,23 +32,32 @@
         try { event.preventDefault(); } catch (e) {}
       });
 
-      /* Service workers are an optional cache layer. Registration is delayed
-         until after the first page load and every failure is contained so a
-         broken/stale worker can never block DOM paint or touch events. */
+      /* Service workers are disabled for this static WebView build. Remove
+         old registrations and caches without waiting on either operation. */
       (function () {
-        function registerSafely() {
-          if (!navigator.serviceWorker) return;
+        function resetServiceWorkersSafely() {
           try {
-            var official = /^\/Official(?:\/|$)/i.test(window.location.pathname);
-            var swUrl = new URL(official ? '/Official/sw.js' : '/sw.js', window.location.origin);
-            var scopeUrl = new URL(official ? '/Official/' : '/', window.location.origin);
-            navigator.serviceWorker.register(swUrl.href, { scope: scopeUrl.pathname })
-              .catch(function () {});
+            if (navigator.serviceWorker &&
+                typeof navigator.serviceWorker.getRegistrations === 'function') {
+              navigator.serviceWorker.getRegistrations().then(function (registrations) {
+                (registrations || []).forEach(function (registration) {
+                  try {
+                    var result = registration.unregister();
+                    if (result && typeof result.catch === 'function') result.catch(function () {});
+                  } catch (e) {}
+                });
+              }).catch(function () {});
+            }
+            if (window.caches && typeof window.caches.keys === 'function') {
+              window.caches.keys().then(function (keys) {
+                return Promise.all((keys || []).map(function (key) {
+                  try { return window.caches.delete(key); } catch (e) { return Promise.resolve(false); }
+                }));
+              }).catch(function () {});
+            }
           } catch (e) {}
         }
-        window.addEventListener('load', function () {
-          setTimeout(registerSafely, 0);
-        }, { once: true });
+        resetServiceWorkersSafely();
       }());
     </script>
     <link rel="icon" type="image/jpeg" href="./star-icon.jpg" />

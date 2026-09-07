@@ -1,0 +1,1 @@
+- [Android WebView touch locks](android-webview-touch-locks.md) — compiled UI bundles may need global touch scroll-lock listeners disabled before import.

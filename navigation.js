@@ -116,22 +116,44 @@
         }
 
   /* Android hardware back dispatches popstate in some WebViews and
-     hashchange in others. Keep this coordinator deliberately defensive:
-     it closes only the app-owned settings modal, then leaves route handling
-     to the compiled router and the browser's already-completed history step. */
-  function handleSafePopState() {
+     hashchange in others. This handler never cancels the event, never calls
+     history.back(), and resets interaction state before the router runs. */
+  function forceResetBackUi() {
     try {
-      if (typeof window.__sfHandlePopstate === 'function' &&
-          window.__sfHandlePopstate() === true) {
-        return;
+      if (document.documentElement) {
+        document.documentElement.style.setProperty('pointer-events', 'auto', 'important');
       }
-      var settings = document.getElementById('sf-settings-modal');
-      if (settings && settings.classList && settings.classList.contains('open')) {
-        settings.classList.remove('open');
+      if (document.body) {
+        document.body.style.pointerEvents = 'auto';
+        document.body.style.overflow = 'auto';
+        document.body.style.setProperty('pointer-events', 'auto', 'important');
+        document.body.style.setProperty('overflow', 'auto', 'important');
+      }
+      if (document.getElementById('root')) {
+        document.getElementById('root').style.setProperty('pointer-events', 'auto', 'important');
+      }
+      var overlaySelector = [
+        '#sf-settings-modal',
+        '.modal-backdrop',
+        '.modal-overlay',
+        '#overlay',
+        '[data-radix-dialog-overlay]',
+        '[data-radix-dialog-content]',
+        '[class*="backdrop"]',
+        '[class*="fixed"][class*="inset-0"]',
+        'iframe[title="Earn Coins"]'
+      ].join(',');
+      document.querySelectorAll(overlaySelector).forEach(function (overlay) {
+        overlay.style.setProperty('display', 'none', 'important');
+        overlay.style.setProperty('pointer-events', 'none', 'important');
+      });
+      if (typeof window.__sfHandlePopstate === 'function') {
+        try { window.__sfHandlePopstate(); } catch (e) {}
       }
     } catch (e) {}
   }
-  window.addEventListener('popstate', handleSafePopState, false);
+  window.addEventListener('popstate', forceResetBackUi, false);
+  window.addEventListener('hashchange', forceResetBackUi, false);
 
         /* ── SCHEDULER ────────────────────────────────────────────────
            One shared idle scheduler for every deferred/coalesced job in
@@ -275,7 +297,17 @@
          * top-level request, so it can't be blocked or misrouted on any
          * Android version.
          */
-        .replace(
+         .replace(
+           ',document.addEventListener("touchmove",p,Er),document.addEventListener("touchstart",b,Er)',
+           ''
+         )
+         /*
+          * The imported component library installs a global scroll-isolation
+          * listener that calls preventDefault() for touchmove. That is useful
+          * for desktop dialogs but can strand Android WebViews after back
+          * navigation. Leave native touch handling to Chromium instead.
+          */
+         .replace(
           'hrefs:n=>n,aroundNav:(n,r,i)=>n(r,i)}',
           'hrefs:n=>(window.__sfAppPath?window.__sfAppPath(n):n),aroundNav:(n,r,i)=>n(r,i)}'
         )
@@ -402,7 +434,9 @@
        }
        window.__sfHandlePopstate = function () {
          if (!sfModal || !sfModal.classList.contains('open')) return false;
-         closeSettings(true);
+          sfModal.style.setProperty('display', 'none', 'important');
+          sfModal.style.setProperty('pointer-events', 'none', 'important');
+          closeSettings(true);
          return true;
        };
 
