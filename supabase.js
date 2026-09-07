@@ -7,7 +7,7 @@
    Responsibilities:
      1. Persistent API response cache (offline-first first paint)
      2. View cache used by the bundle's query hooks
-     3. Sequential API request queue + 15s watchdog on every fetch
+     3. Sequential API request queue without blocking timeouts
      4. Auth bootstrap: cached session, background session recovery
      5. Device-ID 1-click auto-login banner
    ══════════════════════════════════════════════════════════════ */
@@ -130,9 +130,10 @@
            than once). In-memory only — no storage on the hot path. */
         var _syncStamps = {};
         window.__sfCanSync = function (key, windowMs) {
+           if (!windowMs || windowMs <= 0) return true;
           var now = Date.now();
           var last = _syncStamps[key] || 0;
-          if (now - last < (windowMs || 15000)) return false;
+           if (now - last < windowMs) return false;
           _syncStamps[key] = now;
           return true;
         };
@@ -183,8 +184,8 @@
           });
         }
 
-        /* ── 5) FETCH WRAPPER: timeout + queue + offline-first cache ──
-           Every fetch() is guaranteed to settle within FETCH_TIMEOUT_MS.
+         /* ── 5) FETCH WRAPPER: queue + offline-first cache ────────────
+            Fetch remains asynchronous and uses the caller's AbortSignal.
            This wrapper is installed first, so every later fetch wrapper
            in this app (supabase-api.js, the admin CPA-URL interceptor,
            etc.) sits on top of it and inherits this behavior.
@@ -197,57 +198,19 @@
              - If no cached copy exists yet (first-ever load), the real
                request is queued and awaited normally, then cached.
 
-           Non-API requests (page assets, fonts, the app bundle itself)
-           are never queued or cached here — they go straight through
-           with just the timeout applied.
+            Non-API requests (page assets, fonts, the app bundle itself)
+            are never queued or cached here — they go straight through.
 
-           IMPORTANT: the app's data layer (react-query) calls fetch
-           with its OWN AbortSignal already attached (for cancelling on
-           unmount / refetch). We always install our own controller and
-           forward an abort from the caller's signal into it, so both
-           can trigger an abort but our timeout always applies. */
-        var FETCH_TIMEOUT_MS = 15000; // 15s network/auth window for Android WebViews
+            IMPORTANT: the app's data layer (react-query) calls fetch
+            with its OWN AbortSignal already attached. We pass that signal
+            through unchanged so cancellation remains caller-controlled. */
         var _nativeFetch = window.fetch ? window.fetch.bind(window) : null;
 
-        function timedFetch(input, init, url) {
-          var callerSignal = init.signal;
-          var controller = new AbortController();
-          var timer = setTimeout(function () { controller.abort(); }, FETCH_TIMEOUT_MS);
-          var forwardCallerAbort = function () { controller.abort(); };
-
-          if (callerSignal) {
-            if (callerSignal.aborted) {
-              controller.abort();
-            } else {
-              callerSignal.addEventListener('abort', forwardCallerAbort, { once: true });
-            }
-          }
-
-          var finalInit = Object.assign({}, init, { signal: controller.signal });
-          var settle = function () {
-            clearTimeout(timer);
-            if (callerSignal) {
-              callerSignal.removeEventListener('abort', forwardCallerAbort);
-            }
-          };
-
-          return _nativeFetch(input, finalInit).then(
-            function (res) { settle(); return res; },
-            function (err) {
-              settle();
-              var callerAborted = callerSignal && callerSignal.aborted;
-              if (callerAborted) throw err; // real cancellation, propagate as-is
-              if (err && err.name === 'AbortError') {
-                var timeoutErr = new Error('Request timed out after ' + FETCH_TIMEOUT_MS + 'ms: ' + url);
-                timeoutErr.name = 'TimeoutError';
-                throw timeoutErr;
-              }
-              throw err;
-            }
-          );
+         function timedFetch(input, init) {
+           return _nativeFetch(input, init);
         }
 
-        if (_nativeFetch && typeof AbortController === 'function') {
+         if (_nativeFetch) {
           window.fetch = function (input, init) {
             init = init || {};
             var url = typeof input === 'string' ? input : ((input && input.url) || '');
@@ -316,7 +279,7 @@
         window.addEventListener('unhandledrejection', function (event) {
           var reason = event && event.reason;
           var name = reason && reason.name;
-          if (name === 'TimeoutError' || name === 'AbortError' || name === 'TypeError') {
+           if (name === 'AbortError' || name === 'TypeError') {
             console.warn('[sf-webview-compat] network call did not complete cleanly:', reason);
             event.preventDefault();
           }
@@ -356,14 +319,6 @@
             return;
           }
 
-          var timeoutId;
-          var timeout = new Promise(function (_, reject) {
-            timeoutId = setTimeout(function () {
-              var error = new Error('Supabase auth session timed out after 10000ms');
-              error.name = 'AuthSessionTimeoutError';
-              reject(error);
-            }, 10000);
-          });
           var sessionPromise;
           try {
             sessionPromise = client.auth.getSession();
@@ -372,16 +327,14 @@
             return;
           }
 
-          Promise.race([Promise.resolve(sessionPromise), timeout])
+           Promise.resolve(sessionPromise)
             .then(function (result) {
-              clearTimeout(timeoutId);
               var session = result && result.data && result.data.session;
               if (session) cacheSession(session);
               window.__sfAuthSessionReady = true;
               window.dispatchEvent(new CustomEvent('sf-auth-session-ready'));
             })
             .catch(function () {
-              clearTimeout(timeoutId);
               // Cached auth remains authoritative for the first render.
               window.__sfAuthSessionReady = true;
             });

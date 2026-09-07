@@ -278,24 +278,24 @@
         /*
          * React Query view hooks now hydrate synchronously from the
          * view-level localStorage cache. The cached object is the initial
-         * render only; an older-than-15s entry is silently revalidated and
+          * render only; cached data is silently revalidated in the background
          * the mounted component receives the fresh result in place.
          */
         .replace(
           'function ao(n,r){const i=MR(n);return{...Gs(i),queryKey:i.queryKey}}',
-          'function ao(n,r){const i=MR(n),s=window.__sfReadViewCache?window.__sfReadViewCache(NR(n),{coins:0,totalOrders:0,successfulOrders:0,referrals:0,referralCode:"",referredBy:null,createdAt:"1970-01-01T00:00:00.000Z"}):{data:{coins:0,totalOrders:0,successfulOrders:0,referrals:0,referralCode:"",referredBy:null,createdAt:"1970-01-01T00:00:00.000Z"},updatedAt:0};return{...Gs({...i,initialData:s.data,initialDataUpdatedAt:s.updatedAt,staleTime:15000,refetchOnWindowFocus:!1,retry:1}),queryKey:i.queryKey}}'
+          'function ao(n,r){const i=MR(n),s=window.__sfReadViewCache?window.__sfReadViewCache(NR(n),{coins:0,totalOrders:0,successfulOrders:0,referrals:0,referralCode:"",referredBy:null,createdAt:"1970-01-01T00:00:00.000Z"}):{data:{coins:0,totalOrders:0,successfulOrders:0,referrals:0,successfulOrders:0,referralCode:"",referredBy:null,createdAt:"1970-01-01T00:00:00.000Z"},updatedAt:0};return{...Gs({...i,initialData:s.data,initialDataUpdatedAt:s.updatedAt,staleTime:0,refetchOnWindowFocus:!1,retry:1}),queryKey:i.queryKey}}'
         )
         .replace(
           'function qR(n,r){const i=HR(n);return{...Gs(i),queryKey:i.queryKey}}',
-          'function qR(n,r){const i=HR(n),s=window.__sfReadViewCache?window.__sfReadViewCache(LR(n),[]):{data:[],updatedAt:0};return{...Gs({...i,initialData:s.data,initialDataUpdatedAt:s.updatedAt,staleTime:15000,refetchOnWindowFocus:!1,retry:1}),queryKey:i.queryKey}}'
+          'function qR(n,r){const i=HR(n),s=window.__sfReadViewCache?window.__sfReadViewCache(LR(n),[]):{data:[],updatedAt:0};return{...Gs({...i,initialData:s.data,initialDataUpdatedAt:s.updatedAt,staleTime:0,refetchOnWindowFocus:!1,retry:1}),queryKey:i.queryKey}}'
         )
         .replace(
           'function eO(){return Gs({queryKey:["public-services"],queryFn:()=>qr("/api/services").then(n=>n.json()),staleTime:6e4})}',
-          'function eO(){const n=window.__sfReadViewCache?window.__sfReadViewCache("/api/services",{services:[],offerwallUrl:"",cpaLeadUrl:"",videoUrl:""}):{data:{services:[],offerwallUrl:"",cpaLeadUrl:"",videoUrl:""},updatedAt:0};return Gs({queryKey:["public-services"],queryFn:()=>qr("/api/services").then(r=>r.json()),initialData:n.data,initialDataUpdatedAt:n.updatedAt,staleTime:15000,refetchOnWindowFocus:!1,retry:1})}'
+          'function eO(){const n=window.__sfReadViewCache?window.__sfReadViewCache("/api/services",{services:[],offerwallUrl:"",cpaLeadUrl:"",videoUrl:""}):{data:{services:[],offerwallUrl:"",cpaLeadUrl:"",videoUrl:""},updatedAt:0};return Gs({queryKey:["public-services"],queryFn:()=>qr("/api/services").then(r=>r.json()),initialData:n.data,initialDataUpdatedAt:n.updatedAt,staleTime:0,refetchOnWindowFocus:!1,retry:1})}'
         )
         .replace(
           'function aO(){return Gs({queryKey:["public-services"],queryFn:()=>qr("/api/services").then(n=>n.json()),staleTime:6e4})}',
-          'function aO(){const n=window.__sfReadViewCache?window.__sfReadViewCache("/api/services",{services:[],offerwallUrl:"",cpaLeadUrl:"",videoUrl:""}):{data:{services:[],offerwallUrl:"",cpaLeadUrl:"",videoUrl:""},updatedAt:0};return Gs({queryKey:["public-services"],queryFn:()=>qr("/api/services").then(r=>r.json()),initialData:n.data,initialDataUpdatedAt:n.updatedAt,staleTime:15000,refetchOnWindowFocus:!1,retry:1})}'
+          'function aO(){const n=window.__sfReadViewCache?window.__sfReadViewCache("/api/services",{services:[],offerwallUrl:"",cpaLeadUrl:"",videoUrl:""}):{data:{services:[],offerwallUrl:"",cpaLeadUrl:"",videoUrl:""},updatedAt:0};return Gs({queryKey:["public-services"],queryFn:()=>qr("/api/services").then(r=>r.json()),initialData:n.data,initialDataUpdatedAt:n.updatedAt,staleTime:0,refetchOnWindowFocus:!1,retry:1})}'
         )
         /*
          * Keep the authenticated layout mounted for all app tabs. Only the
@@ -309,11 +309,11 @@
         /*
          * CPA/offer callbacks can arrive more than once from Android
          * WebViews. Credit sync and the following profile refresh are
-         * therefore accepted at most once per user every 15 seconds.
+         * therefore accepted through the in-memory sync guard.
          */
         .replace(
           'const w=g.useCallback(async R=>{if(!(!R||R<=0))try{',
-          'const w=g.useCallback(async R=>{if(!(!R||R<=0)&&(window.__sfCanSync?window.__sfCanSync("coins:"+n,15000):!0))try{'
+           'const w=g.useCallback(async R=>{if(!(!R||R<=0)&&(window.__sfCanSync?window.__sfCanSync("coins:"+n):!0))try{'
         )
         .replace('const nC="/assets/', 'const nC=(window.__SF_BASE_PATH||"")+"/assets/')
         .replace('const ZA="/assets/', 'const ZA=(window.__SF_BASE_PATH||"")+"/assets/')
