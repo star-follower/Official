@@ -9,7 +9,13 @@ const STATIC_ASSETS = [
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(STATIC_ASSETS))
+    caches.open(CACHE_NAME)
+      .then((cache) => Promise.all(
+        STATIC_ASSETS.map((asset) =>
+          cache.add(asset).catch(() => null)
+        )
+      ))
+      .catch(() => null)
   );
   self.skipWaiting();
 });
@@ -18,24 +24,40 @@ self.addEventListener("activate", (event) => {
   event.waitUntil(
     caches.keys().then((keys) =>
       Promise.all(keys.filter((k) => k !== CACHE_NAME).map((k) => caches.delete(k)))
-    )
+    ).catch(() => null)
   );
   self.clients.claim();
 });
 
 self.addEventListener("fetch", (event) => {
-  // Never intercept API calls — let supabase-api.js handle them in the main thread
-  const url = new URL(event.request.url);
-  if (
-    url.pathname.startsWith("/api/") ||
-    url.pathname.startsWith(BASE_PATH + "api/")
-  ) return;
-  // Never intercept Supabase or CDN calls
-  if (url.hostname.includes("supabase") || url.hostname.includes("jsdelivr")) return;
-  // Only cache GET requests
-  if (event.request.method !== "GET") return;
+  try {
+    // Never intercept cross-origin, API, Supabase, or CDN calls.
+    const url = new URL(event.request.url);
+    if (url.origin !== self.location.origin) return;
+    if (
+      url.pathname.startsWith("/api/") ||
+      url.pathname.startsWith(BASE_PATH + "api/")
+    ) return;
+    if (url.hostname.includes("supabase") || url.hostname.includes("jsdelivr")) return;
+    if (event.request.method !== "GET") return;
 
-  event.respondWith(
-    caches.match(event.request).then((cached) => cached || fetch(event.request))
-  );
+    event.respondWith(
+      caches.match(event.request)
+        .then((cached) => cached || fetch(event.request))
+        .catch(() =>
+          caches.match(BASE_PATH)
+            .then((fallback) => fallback || new Response("", {
+              status: 503,
+              statusText: "Offline"
+            }))
+            .catch(() => new Response("", { status: 503, statusText: "Offline" }))
+        )
+    );
+  } catch (e) {
+    // A malformed request must not create an unhandled fetch rejection.
+  }
+});
+
+self.addEventListener("unhandledrejection", (event) => {
+  event.preventDefault();
 });

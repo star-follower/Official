@@ -3,16 +3,18 @@
 
   function initTimeWallCleanup() {
     function removeTimeWallOverlay() {
-    document.querySelectorAll('.modal-backdrop, .modal-overlay, #overlay, [class*="backdrop"]').forEach(el => el.remove());
-    document.body.style.overflow = 'auto';
+      try {
+        document.querySelectorAll('.modal-backdrop, .modal-overlay, #overlay, [class*="backdrop"]').forEach(el => el.remove());
+        if (document.body) document.body.style.overflow = 'auto';
 
-    // The React close handler normally unmounts this container. Remove it as
-    // a fallback as well so a stale iframe can never cover the Earn page.
-    var iframe = document.querySelector('iframe[title="Earn Coins"]');
-    if (iframe) {
-      var container = iframe.closest('div[class*="fixed"][class*="inset-0"]');
-      if (container) container.remove();
-    }
+        // The React close handler normally unmounts this container. Remove it as
+        // a fallback as well so a stale iframe can never cover the Earn page.
+        var iframe = document.querySelector('iframe[title="Earn Coins"]');
+        if (iframe) {
+          var container = iframe.closest('div[class*="fixed"][class*="inset-0"]');
+          if (container) container.remove();
+        }
+      } catch (e) {}
     }
 
     function isTimeWallCloseControl(element) {
@@ -45,8 +47,12 @@
     }, true);
 
     // Covers browser/device back navigation while the offerwall is open.
-    window.addEventListener('popstate', removeTimeWallOverlay);
-    window.addEventListener('hashchange', removeTimeWallOverlay);
+    window.addEventListener('popstate', function () {
+      try { removeTimeWallOverlay(); } catch (e) {}
+    });
+    window.addEventListener('hashchange', function () {
+      try { removeTimeWallOverlay(); } catch (e) {}
+    });
   }
 
   if (document.readyState === 'loading') {

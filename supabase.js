@@ -280,9 +280,9 @@
           var reason = event && event.reason;
           var name = reason && reason.name;
            if (name === 'AbortError' || name === 'TypeError') {
-            console.warn('[sf-webview-compat] network call did not complete cleanly:', reason);
-            event.preventDefault();
-          }
+             console.warn('[sf-webview-compat] network call did not complete cleanly:', reason);
+           }
+           try { event.preventDefault(); } catch (e) {}
         });
 
   /* ── 4) AUTH BOOTSTRAP ─────────────────────────────────────── */
