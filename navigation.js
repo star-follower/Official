@@ -115,6 +115,24 @@
              the 'locationchange' event existing. */
         }
 
+  /* Android hardware back dispatches popstate in some WebViews and
+     hashchange in others. Keep this coordinator deliberately defensive:
+     it closes only the app-owned settings modal, then leaves route handling
+     to the compiled router and the browser's already-completed history step. */
+  function handleSafePopState() {
+    try {
+      if (typeof window.__sfHandlePopstate === 'function' &&
+          window.__sfHandlePopstate() === true) {
+        return;
+      }
+      var settings = document.getElementById('sf-settings-modal');
+      if (settings && settings.classList && settings.classList.contains('open')) {
+        settings.classList.remove('open');
+      }
+    } catch (e) {}
+  }
+  window.addEventListener('popstate', handleSafePopState, false);
+
         /* ── SCHEDULER ────────────────────────────────────────────────
            One shared idle scheduler for every deferred/coalesced job in
            this page (cache flushes, MutationObserver reactions, DOM
@@ -358,8 +376,35 @@
       }
       var sfModal = document.getElementById('sf-settings-modal');
 
-      function openSettings()  { sfModal.classList.add('open'); }
-      function closeSettings() { sfModal.classList.remove('open'); }
+       var settingsHistoryPushed = false;
+       function openSettings() {
+         if (!sfModal) return;
+         sfModal.classList.add('open');
+         if (!settingsHistoryPushed) {
+           try {
+             history.pushState(
+               Object.assign({}, history.state || {}, { sfSettings: true }),
+               '',
+               window.location.href
+             );
+             settingsHistoryPushed = true;
+           } catch (e) {}
+         }
+       }
+       function closeSettings(fromPopState) {
+         if (sfModal) sfModal.classList.remove('open');
+         if (settingsHistoryPushed) {
+           settingsHistoryPushed = false;
+           if (!fromPopState) {
+             try { history.back(); } catch (e) {}
+           }
+         }
+       }
+       window.__sfHandlePopstate = function () {
+         if (!sfModal || !sfModal.classList.contains('open')) return false;
+         closeSettings(true);
+         return true;
+       };
 
       document.getElementById('sf-modal-close').addEventListener('click', closeSettings);
 

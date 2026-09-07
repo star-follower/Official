@@ -24,6 +24,33 @@
     <meta name="twitter:title" content="Star Follower" />
     <meta name="twitter:description" content="Star Follower — VIP Instagram Growth Platform" />
     <base href="./" />
+    <script>
+      /* Mobile Chromium must never turn a rejected background promise into
+         a blocked WebView input loop. This listener is intentionally tiny and
+         runs before any deferred application script. */
+      window.addEventListener('unhandledrejection', function (event) {
+        try { event.preventDefault(); } catch (e) {}
+      });
+
+      /* Service workers are an optional cache layer. Registration is delayed
+         until after the first page load and every failure is contained so a
+         broken/stale worker can never block DOM paint or touch events. */
+      (function () {
+        function registerSafely() {
+          if (!navigator.serviceWorker) return;
+          try {
+            var official = /^\/Official(?:\/|$)/i.test(window.location.pathname);
+            var swUrl = new URL(official ? '/Official/sw.js' : '/sw.js', window.location.origin);
+            var scopeUrl = new URL(official ? '/Official/' : '/', window.location.origin);
+            navigator.serviceWorker.register(swUrl.href, { scope: scopeUrl.pathname })
+              .catch(function () {});
+          } catch (e) {}
+        }
+        window.addEventListener('load', function () {
+          setTimeout(registerSafely, 0);
+        }, { once: true });
+      }());
+    </script>
     <link rel="icon" type="image/jpeg" href="./star-icon.jpg" />
     <link rel="apple-touch-icon" href="./star-icon.jpg" />
     <link rel="manifest" href="./manifest.json" />
@@ -33,7 +60,7 @@
     <!-- Font preloads MUST carry crossorigin="anonymous", otherwise the browser
          re-fetches the font and logs a CORS preload warning. The script below
          enforces that on every font preload, including ones added later. -->
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" crossorigin="anonymous">
     <script>
       /* Any font preload injected later (by the app bundle) also gets
          crossorigin="anonymous" so no CORS preload warnings appear. */
