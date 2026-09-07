@@ -299,11 +299,15 @@
           }
         }
 
-        // Synchronous auth snapshot: never await getSession for first paint.
-        window.__sfCachedAuthSession =
-          readJson(AUTH_CACHE_KEY) ||
-          readJson(SUPABASE_AUTH_KEY) ||
-          null;
+        // Defer even the storage read so auth bootstrap cannot occupy the
+        // first input/paint task on Android WebView.
+        window.__sfCachedAuthSession = null;
+        setTimeout(function () {
+          window.__sfCachedAuthSession =
+            readJson(AUTH_CACHE_KEY) ||
+            readJson(SUPABASE_AUTH_KEY) ||
+            null;
+        }, 0);
 
         function cacheSession(session) {
           if (!session) return;
@@ -340,12 +344,9 @@
             });
         }
 
-        // Defer only the reconciliation, not the app mount.
-        if (window.queueMicrotask) {
-          queueMicrotask(resolveSessionInBackground);
-        } else {
-          setTimeout(resolveSessionInBackground, 0);
-        }
+        // A timer yields the first frame; a microtask can still run before
+        // Chromium has painted and accepted the first touch.
+        setTimeout(resolveSessionInBackground, 0);
   }());
 
   /* ── 5) DEVICE-ID AUTO-LOGIN BANNER ────────────────────────── */
@@ -418,7 +419,9 @@
   }
   function scheduleDeviceIdLogin() {
     if (document.readyState === 'loading') {
-      document.addEventListener('DOMContentLoaded', initDeviceIdLogin, { once: true });
+      document.addEventListener('DOMContentLoaded', function () {
+        setTimeout(initDeviceIdLogin, 0);
+      }, { once: true });
     } else {
       setTimeout(initDeviceIdLogin, 0);
     }

@@ -36,10 +36,17 @@ window.sfLoggedIn = window.sfLoggedIn || false;
     return window.sfLoggedIn;
   };
 
-  /* Initial sync + cross-tab sync. */
-  window.sfIsLoggedIn();
+  /* Initial sync + cross-tab sync. Both are deferred so storage checks cannot
+     compete with the first Android WebView input frame. */
+  setTimeout(function () {
+    try { window.sfIsLoggedIn(); } catch (e) {}
+  }, 0);
   window.addEventListener('storage', function (e) {
-    if (!e || !e.key || e.key === 'sf_user_id' || e.key === 'sf_token') window.sfIsLoggedIn();
+    if (!e || !e.key || e.key === 'sf_user_id' || e.key === 'sf_token') {
+      setTimeout(function () {
+        try { window.sfIsLoggedIn(); } catch (ignore) {}
+      }, 0);
+    }
   });
 })();
 
@@ -82,19 +89,29 @@ window.sfLoggedIn = window.sfLoggedIn || false;
     }
   }
 
-  var db = createSupabaseClient();
-  window.__sfSupabaseClient = db;
-  window.__sfSupabaseReady = !!db;
+  var db = null;
+  var dbInitAttempts = 0;
+  var dbReadyResolve;
+  var dbReady = new Promise(function (resolve) {
+    dbReadyResolve = resolve;
+  });
+  window.__sfSupabaseClient = null;
+  window.__sfSupabaseReady = false;
 
-  // If a WebView finishes the CDN load after this script evaluates, retry
-  // later without delaying DOM paint or touch/click registration.
-  if (!db) {
-    setTimeout(function () {
-      db = createSupabaseClient();
-      window.__sfSupabaseClient = db;
-      window.__sfSupabaseReady = !!db;
-    }, 0);
+  // Client construction is deferred until after the first frame. Requests
+  // that arrive before then await this promise without blocking the browser.
+  function initializeSupabaseClient() {
+    dbInitAttempts++;
+    db = createSupabaseClient();
+    window.__sfSupabaseClient = db;
+    window.__sfSupabaseReady = !!db;
+    if (db || dbInitAttempts >= 3) {
+      dbReadyResolve(db);
+      return;
+    }
+    setTimeout(initializeSupabaseClient, 50);
   }
+  setTimeout(initializeSupabaseClient, 0);
 
   // ─── service name map (mirrors the bundle's IA array) ───────────────────────
   var SERVICE_NAMES = [
@@ -983,6 +1000,7 @@ window.sfLoggedIn = window.sfLoggedIn || false;
   // ─── router ──────────────────────────────────────────────────────────────────
 
   async function route(url, init) {
+    if (!db) await dbReady;
     if (!db) return errRes('Service temporarily unavailable. Please try again.', 503);
     var method = ((init && init.method) || 'GET').toUpperCase();
     var body   = (method !== 'GET') ? parseBody(init) : {};

@@ -496,7 +496,9 @@
   }
 
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', initUiFixes, { once: true });
+    document.addEventListener('DOMContentLoaded', function () {
+      setTimeout(initUiFixes, 0);
+    }, { once: true });
   } else {
     setTimeout(initUiFixes, 0);
   }
