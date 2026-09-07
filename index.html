@@ -32,6 +32,41 @@
         try { event.preventDefault(); } catch (e) {}
       });
 
+      /* Hardware Back can arrive before the deferred navigation module.
+         Reset the document immediately and never cancel the popstate event. */
+      (function () {
+        function resetBackInteraction() {
+          try {
+            if (document.documentElement) {
+              document.documentElement.style.pointerEvents = 'auto';
+              document.documentElement.style.setProperty('pointer-events', 'auto', 'important');
+            }
+            if (document.body) {
+              document.body.style.pointerEvents = 'auto';
+              document.body.style.overflow = 'auto';
+              document.body.style.setProperty('pointer-events', 'auto', 'important');
+              document.body.style.setProperty('overflow', 'auto', 'important');
+            }
+            document.querySelectorAll([
+              '#sf-settings-modal',
+              '.modal-backdrop',
+              '.modal-overlay',
+              '#overlay',
+              '[aria-modal="true"]',
+              '[data-radix-dialog-overlay]',
+              '[data-radix-dialog-content]',
+              '[class*="backdrop"]',
+              '[class*="fixed"][class*="inset-0"]',
+              'iframe[title="Earn Coins"]'
+            ].join(',')).forEach(function (overlay) {
+              overlay.style.setProperty('display', 'none', 'important');
+            });
+          } catch (e) {}
+        }
+        window.__sfForceBackReset = resetBackInteraction;
+        window.addEventListener('popstate', resetBackInteraction, false);
+      }());
+
       /* Service workers are disabled for this static WebView build. Remove
          old registrations and caches without waiting on either operation. */
       (function () {

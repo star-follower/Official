@@ -145,7 +145,6 @@
       ].join(',');
       document.querySelectorAll(overlaySelector).forEach(function (overlay) {
         overlay.style.setProperty('display', 'none', 'important');
-        overlay.style.setProperty('pointer-events', 'none', 'important');
       });
       if (typeof window.__sfHandlePopstate === 'function') {
         try { window.__sfHandlePopstate(); } catch (e) {}
@@ -435,7 +434,6 @@
        window.__sfHandlePopstate = function () {
          if (!sfModal || !sfModal.classList.contains('open')) return false;
           sfModal.style.setProperty('display', 'none', 'important');
-          sfModal.style.setProperty('pointer-events', 'none', 'important');
           closeSettings(true);
          return true;
        };
