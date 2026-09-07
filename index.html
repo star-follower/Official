@@ -2,7 +2,7 @@
 <html lang="en">
   <head>
     <script>
-      // Global touch unblocker
+      // Global touch unblocker & Safe pointer events enforcer
       window.addEventListener('DOMContentLoaded', function() {
         document.body.style.pointerEvents = 'auto';
         document.documentElement.style.pointerEvents = 'auto';
@@ -10,14 +10,18 @@
 
       // Prevent unhandled promise rejections from locking the main UI thread
       window.addEventListener('unhandledrejection', function(e) {
-        e.preventDefault();
+        try { e.preventDefault(); } catch (ignore) {}
         if (document.body) document.body.style.pointerEvents = 'auto';
+        if (document.documentElement) document.documentElement.style.pointerEvents = 'auto';
       });
 
       // Safety interval to ensure pointer events are NEVER disabled longer than 100ms
       setInterval(function() {
         if (document.body && document.body.style.pointerEvents === 'none') {
           document.body.style.pointerEvents = 'auto';
+        }
+        if (document.documentElement && document.documentElement.style.pointerEvents === 'none') {
+          document.documentElement.style.pointerEvents = 'auto';
         }
         document.querySelectorAll([
           'body > [class*="backdrop"]',
@@ -32,6 +36,7 @@
         });
       }, 100);
     </script>
+
     <!-- Global site tag (gtag.js) - Google Analytics -->
     <script async src="https://www.googletagmanager.com/gtag/js?id=G-N7N1172PV1"></script>
     <script>
@@ -56,15 +61,7 @@
     <meta name="twitter:description" content="Star Follower — VIP Instagram Growth Platform" />
     <base href="./" />
     <script>
-      /* Mobile Chromium must never turn a rejected background promise into
-         a blocked WebView input loop. This listener is intentionally tiny and
-         runs before any deferred application script. */
-      window.addEventListener('unhandledrejection', function (event) {
-        try { event.preventDefault(); } catch (e) {}
-      });
-
-      /* Hardware Back can arrive before the deferred navigation module.
-         Reset the document immediately and never cancel the popstate event. */
+      /* Mobile Chromium touch protection & Hardware Back reset */
       (function () {
         function resetBackInteraction() {
           try {
@@ -98,8 +95,7 @@
         window.addEventListener('popstate', resetBackInteraction, false);
       }());
 
-      /* Service workers are disabled for this static WebView build. Remove
-         old registrations and caches without waiting on either operation. */
+      /* Service workers cleanup */
       (function () {
         function resetServiceWorkersSafely() {
           try {
@@ -132,13 +128,8 @@
     <meta name="theme-color" content="#0f1523" />
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous">
-    <!-- Font preloads MUST carry crossorigin="anonymous", otherwise the browser
-         re-fetches the font and logs a CORS preload warning. The script below
-         enforces that on every font preload, including ones added later. -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" crossorigin="anonymous">
     <script>
-      /* Any font preload injected later (by the app bundle) also gets
-         crossorigin="anonymous" so no CORS preload warnings appear. */
       (function () {
         function fix(link) {
           if (link && link.rel === 'preload' && link.as === 'font' &&
@@ -159,14 +150,11 @@
       })();
     </script>
 
-
-    <!-- ── Local styles (all UI/animation/layout CSS) ─────────── -->
+    <!-- Local styles -->
     <link rel="stylesheet" href="./style.css" />
     <link rel="stylesheet" crossorigin href="./assets/index-bakB4Qyk.css">
 
-    <!-- MODULE LOAD ORDER — do not reorder. navigation.js installs the
-         storage/history/scheduler layer; supabase.js must precede
-         supabase-api.js so the offline-first fetch wrapper is lowest. -->
+    <!-- MODULE LOAD ORDER -->
     <script defer src="./navigation.js?v=modular-1"></script>
     <script defer src="./supabase.js?v=modular-1"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
@@ -174,8 +162,6 @@
     <script defer src="./sf-webview-share.js?v=20260824-share-fix"></script>
     <script defer src="./refer.js?v=modular-1"></script>
     <script type="module">
-      /* Let the browser paint and accept input before the compiled bundle
-         begins its fetch/transform/import work. */
       setTimeout(function () {
         try {
           if (typeof window.__sfLoadAppBundle === 'function') {
@@ -188,12 +174,10 @@
         }
       }, 0);
     </script>
-
   </head>
   <body>
     <script>
-      /* Emergency Android WebView touch-unblock bypass. This is intentionally
-         the first body child so a stale overlay cannot lock the first frame. */
+      /* Emergency Touch Unblock Trigger */
       document.addEventListener("DOMContentLoaded", function() {
         document.body.style.pointerEvents = "auto";
         document.documentElement.style.pointerEvents = "auto";
@@ -208,22 +192,6 @@
         document.documentElement.style.pointerEvents = 'auto';
       });
     </script>
-
-    <!-- ── Direct APK Download Banner ──────────────────────────── -->
-    <div id="sf-apk-banner" role="dialog" aria-label="Download Star Follower APK" style="display:none;position:fixed;bottom:0;left:0;right:0;z-index:99999;background:linear-gradient(135deg,#1a1a2e,#16213e,#0f3460);border-top:2px solid #c9a84c;padding:16px 20px;box-shadow:0 -4px 30px rgba(201,168,76,0.25);font-family:'Inter',sans-serif;box-sizing:border-box;">
-      <button id="sf-apk-close" type="button" aria-label="Close APK download banner" title="Close" style="position:absolute;top:7px;right:10px;background:transparent;color:#cbd5e1;border:0;font-size:22px;line-height:1;cursor:pointer;padding:2px 6px;">×</button>
-      <div style="max-width:480px;margin:0 auto;display:flex;align-items:center;gap:14px;">
-         <img src="./star-icon.jpg" alt="Star Follower" style="width:50px;height:50px;border-radius:12px;border:2px solid #c9a84c;flex-shrink:0;" />
-        <div style="flex:1;min-width:0;">
-          <div style="color:#c9a84c;font-weight:700;font-size:14px;line-height:1.2;margin-bottom:3px;">⭐ Install Star Follower</div>
-          <div style="color:#a0aec0;font-size:12px;line-height:1.4;">Download the Android app directly for instant access.</div>
-        </div>
-        <div style="display:flex;flex-direction:column;gap:7px;flex-shrink:0;">
-          <button id="sf-apk-install" type="button" aria-label="Install App (APK)" style="background:linear-gradient(135deg,#c9a84c,#f0d080);color:#0f1523;border:none;border-radius:10px;padding:9px 16px;font-weight:700;font-size:13px;cursor:pointer;white-space:nowrap;font-family:'Inter',sans-serif;">Install App (APK)</button>
-          <button id="sf-apk-dismiss" type="button" style="background:transparent;color:#718096;border:1px solid #2d3748;border-radius:10px;padding:5px 16px;font-size:11px;cursor:pointer;white-space:nowrap;font-family:'Inter',sans-serif;">Not now</button>
-        </div>
-      </div>
-    </div>
 
     <!-- ── Device-ID Auto-Login Banner ────────────────────────── -->
     <div id="sf-dil-wrap">
@@ -298,7 +266,7 @@
     <!-- ── React root ──────────────────────────────────────────── -->
     <div id="root"></div>
 
-    <!-- ── Feature modules (order preserved from the monolith) ── -->
+    <!-- ── Feature modules ── -->
     <script defer src="./earn.js?v=modular-1"></script>
     <script defer src="./timewall-overlay-cleanup.js"></script>
     <script defer src="./star-follower-ui-fixes.js?v=20260818-orders-timewall-login-apk"></script>
