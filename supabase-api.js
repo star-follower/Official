@@ -3,16 +3,98 @@
  * Intercepts all /api/* fetch calls and translates them into
  * direct Supabase database calls. Runs before the main bundle.
  *
- * v2.1 — Robust fallback for old RPC signatures (cpaLeadUrl / videoUrl)
+ * v2.3 — Instant auth response + background profile sync
  */
+
+/* ══════════════════════════════════════════════════════════════════════════
+   GLOBAL LOGIN STATE — declared before ANY other code runs so that no module
+   can throw "sfLoggedIn is not defined".
+   ══════════════════════════════════════════════════════════════════════════ */
+window.sfLoggedIn = window.sfLoggedIn || false;
+
+(function () {
+  'use strict';
+
+  function readAuth() {
+    try {
+      return !!(localStorage.getItem('sf_user_id') && localStorage.getItem('sf_token'));
+    } catch (e) { return false; }
+  }
+
+  /* Re-reads storage, refreshes the global flag and returns it. */
+  window.sfIsLoggedIn = function () {
+    window.sfLoggedIn = readAuth();
+    return window.sfLoggedIn;
+  };
+
+  /* Explicit setter used on login / logout transitions. */
+  window.sfSetLoggedIn = function (value) {
+    window.sfLoggedIn = !!value;
+    try {
+      window.dispatchEvent(new CustomEvent('sf-login-state', { detail: window.sfLoggedIn }));
+    } catch (e) {}
+    return window.sfLoggedIn;
+  };
+
+  /* Initial sync + cross-tab sync. */
+  window.sfIsLoggedIn();
+  window.addEventListener('storage', function (e) {
+    if (!e || !e.key || e.key === 'sf_user_id' || e.key === 'sf_token') window.sfIsLoggedIn();
+  });
+})();
+
 (function () {
   'use strict';
 
   var SUPABASE_URL      = 'https://lgqovwlmicjinwrteivn.supabase.co';
   var SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxncW92d2xtaWNqaW53cnRlaXZuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODIzOTI2NzAsImV4cCI6MjA5Nzk2ODY3MH0.uFU2sczoAZYUcVdZQG-8IGizw2XfFlRY7sbxqaPuEzs';
+  var VIEW_CACHE_KEY    = 'sf_view_cache_v2';
+  var VIEW_CACHE_LIMIT  = 30;
 
-  // Supabase JS is loaded via CDN in index.html before this script
-  var db = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  // Capture the fetch layer installed by supabase.js without adding another
+  // timer or AbortController. Fetch is asynchronous and must never block the
+  // first paint or hold login responses open while a profile refresh runs.
+  var _rawFetch = window.fetch.bind(window);
+
+  // Supabase JS is loaded via CDN in index.html before this script.
+  // Keep session persistence explicit for Android WebViews: the app can
+  // render from its synchronous localStorage auth cache while Supabase
+  // refreshes its session in the background.
+  //
+  function createSupabaseClient() {
+    try {
+      if (!window.supabase || typeof window.supabase.createClient !== 'function') {
+        return null;
+      }
+      return window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+        auth: {
+          autoRefreshToken: true,
+          persistSession: true,
+          storage: window.localStorage,
+          detectSessionInUrl: false
+        },
+        global: {
+          fetch: _rawFetch
+        }
+      });
+    } catch (e) {
+      return null;
+    }
+  }
+
+  var db = createSupabaseClient();
+  window.__sfSupabaseClient = db;
+  window.__sfSupabaseReady = !!db;
+
+  // If a WebView finishes the CDN load after this script evaluates, retry
+  // later without delaying DOM paint or touch/click registration.
+  if (!db) {
+    setTimeout(function () {
+      db = createSupabaseClient();
+      window.__sfSupabaseClient = db;
+      window.__sfSupabaseReady = !!db;
+    }, 0);
+  }
 
   // ─── service name map (mirrors the bundle's IA array) ───────────────────────
   var SERVICE_NAMES = [
@@ -66,6 +148,60 @@
     try { return JSON.parse((init && init.body) || '{}'); } catch (e) { return {}; }
   }
 
+  function readViewCache() {
+    try {
+      var raw = localStorage.getItem(VIEW_CACHE_KEY);
+      var parsed = raw ? JSON.parse(raw) : {};
+      return parsed && typeof parsed === 'object' ? parsed : {};
+    } catch (e) {
+      return {};
+    }
+  }
+
+  function writeViewCache(cache) {
+    try {
+      var keys = Object.keys(cache);
+      keys.sort(function (a, b) {
+        return (cache[b].updatedAt || 0) - (cache[a].updatedAt || 0);
+      });
+      while (keys.length > VIEW_CACHE_LIMIT) delete cache[keys.pop()];
+      localStorage.setItem(VIEW_CACHE_KEY, JSON.stringify(cache));
+    } catch (e) {
+      // Storage is best-effort. Live API responses must never depend on it.
+    }
+  }
+
+  function cacheViewResponse(url, response) {
+    if (!response || !response.ok) return;
+    try {
+      response.clone().json().then(function (data) {
+        var cache = readViewCache();
+        cache[url] = { data: data, updatedAt: Date.now() };
+        writeViewCache(cache);
+      }).catch(function () {});
+    } catch (e) {}
+  }
+
+  window.__sfReadViewCache = function (url, fallback) {
+    var cache = readViewCache();
+    var entry = cache[url];
+    return {
+      data: entry && entry.data != null ? entry.data : fallback,
+      updatedAt: entry && entry.updatedAt ? entry.updatedAt : 0,
+      hasCachedData: !!entry
+    };
+  };
+
+  var _syncWindows = {};
+  window.__sfCanSync = function (key, minimumWindowMs) {
+    if (!minimumWindowMs || minimumWindowMs <= 0) return true;
+    var now = Date.now();
+    var lastRun = _syncWindows[key] || 0;
+    if (now - lastRun < minimumWindowMs) return false;
+    _syncWindows[key] = now;
+    return true;
+  };
+
   // Detect "function does not exist" RPC mismatch errors from Supabase/PostgREST
   function isRpcSchemaMismatch(err) {
     if (!err || !err.message) return false;
@@ -76,6 +212,58 @@
       msg.indexOf('wrong number of arguments') !== -1 ||
       msg.indexOf('pgrst202') !== -1
     );
+  }
+
+  // Shared post-auth sync: given the payload returned by sf_login / sf_recover,
+  // fetch the authoritative profile (sf_get_user) using the freshly issued
+  // token + userId, merge it in, and write it to localStorage in the
+  // background after the auth response has already reached the UI.
+  //
+  // The login/recovery RPC payload is returned immediately, then this refresh
+  // updates the cached profile when the authoritative read completes.
+  async function syncFreshProfile(data) {
+    data = data || {};
+    try {
+      var token  = data.token  || '';
+      var userId = data.userId || data.id || '';
+      if (!token || !userId) return data;
+
+      var freshRes = await db.rpc('sf_get_user', {
+        p_user_id: userId,
+        p_token:   token
+      });
+
+      if (!freshRes.error && freshRes.data && !freshRes.data.error) {
+        var fresh = freshRes.data;
+        fresh.totalOrders      = parseInt(fresh.totalOrders,      10) || 0;
+        fresh.successfulOrders = parseInt(fresh.successfulOrders, 10) || 0;
+        fresh.referrals        = parseInt(fresh.referrals,        10) || 0;
+        fresh.newCompleted     = Array.isArray(fresh.newCompleted) ? fresh.newCompleted : [];
+
+        // Fresh profile wins on every overlapping field (coins included),
+        // but we keep token/userId explicit in case sf_get_user omits them.
+        data = Object.assign({}, data, fresh, { token: token, userId: userId });
+      }
+    } catch (e) {
+      // Non-fatal — fall back to the login/recover RPC's own payload rather
+      // than failing auth over a profile-refresh hiccup.
+    }
+
+    // ── Auth cache write ──────────────────────────────────────────────────
+    // The bundle's boot render reads these keys synchronously on the next
+    // mount. This write is intentionally best-effort and never gates login.
+    try {
+      if (data.userId) localStorage.setItem('sf_user_id', data.userId);
+      if (data.token)  localStorage.setItem('sf_token', data.token);
+      /* login state transition → keep the global flag in sync */
+      if (typeof window.sfIsLoggedIn === 'function') window.sfIsLoggedIn();
+      localStorage.setItem('sf_user_cache', JSON.stringify({
+        data:      data,
+        updatedAt: Date.now()
+      }));
+    } catch (e) {}
+
+    return data;
   }
 
   // ─── route handlers ──────────────────────────────────────────────────────────
@@ -90,23 +278,29 @@
     if (res.data && res.data.error) return jsonRes(res.data, 400);
 
     // Save credentials for device-ID auto-login overlay
-    if (res.data && !res.data.error) {
-      try {
-        localStorage.setItem('sf_saved_creds', JSON.stringify({
-          name:     (body.name || '').trim(),
-          password: body.password || '',
-          deviceId: body.deviceId || ''
-        }));
-      } catch (e) {}
-    }
-    return jsonRes(res.data);
+    try {
+      localStorage.setItem('sf_saved_creds', JSON.stringify({
+        name:     (body.name || '').trim(),
+        password: body.password || '',
+        deviceId: body.deviceId || ''
+      }));
+    } catch (e) {}
+
+    var data = res.data || {};
+    try {
+      if (data.userId) localStorage.setItem('sf_user_id', data.userId);
+      if (data.token) localStorage.setItem('sf_token', data.token);
+      if (typeof window.sfIsLoggedIn === 'function') window.sfIsLoggedIn();
+    } catch (e) {}
+    syncFreshProfile(data).catch(function () {});
+    return jsonRes(data);
   }
 
   async function handleRecover(body) {
-    var recoveryCode = String(body.recoveryCode || '').replace(/\D/g, '');
-    if (!/^\d{10}$/.test(recoveryCode)) {
+    var recoveryCode = String(body.recoveryCode || '').replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+    if (!/^[A-Z0-9]{6}$/.test(recoveryCode)) {
       return jsonRes({
-        error: 'Recovery Code must contain exactly 10 digits.'
+        error: 'कृपया 6-अंकीय Recovery Code डालें!'
       }, 400);
     }
     var res = await db.rpc('sf_recover', {
@@ -115,7 +309,15 @@
     });
     if (res.error) return errRes(res.error.message, 500);
     if (res.data && res.data.error) return jsonRes(res.data, 400);
-    return jsonRes(res.data);
+
+    var data = res.data || {};
+    try {
+      if (data.userId) localStorage.setItem('sf_user_id', data.userId);
+      if (data.token) localStorage.setItem('sf_token', data.token);
+      if (typeof window.sfIsLoggedIn === 'function') window.sfIsLoggedIn();
+    } catch (e) {}
+    syncFreshProfile(data).catch(function () {});
+    return jsonRes(data);
   }
 
   async function handleGetUser(userId, init) {
@@ -133,6 +335,17 @@
     d.successfulOrders = parseInt(d.successfulOrders, 10) || 0;
     d.referrals        = parseInt(d.referrals,        10) || 0;
     d.newCompleted     = Array.isArray(d.newCompleted) ? d.newCompleted : [];
+
+    // Keep the localStorage cache fresh on every explicit profile poll too,
+    // not just at login — cheap insurance against the same "stale until
+    // restart" symptom showing up elsewhere (e.g. after placing an order).
+    try {
+      localStorage.setItem('sf_user_cache', JSON.stringify({
+        data:      d,
+        updatedAt: Date.now()
+      }));
+    } catch (e) {}
+
     return jsonRes(d);
   }
 
@@ -326,7 +539,7 @@
 
       return jsonRes({ ok: true, status: newStatus, updated: true, message: 'Status synced from SMM panel' });
     } catch (e) {
-      // CORS or network error — return current DB status without failing
+      // CORS, network error, or timeout — return current DB status without failing
       return jsonRes({ ok: true, status: order.status, updated: false, message: 'SMM panel unreachable — showing saved status' });
     }
   }
@@ -770,6 +983,7 @@
   // ─── router ──────────────────────────────────────────────────────────────────
 
   async function route(url, init) {
+    if (!db) return errRes('Service temporarily unavailable. Please try again.', 503);
     var method = ((init && init.method) || 'GET').toUpperCase();
     var body   = (method !== 'GET') ? parseBody(init) : {};
 
@@ -817,22 +1031,41 @@
 
   // ─── fetch override ──────────────────────────────────────────────────────────
 
-  var _realFetch = window.fetch.bind(window);
+  // Direct outbound calls use the captured async fetch layer without adding a
+  // hardcoded timeout that can abort login, coin sync, or order operations.
+  var _realFetch = _rawFetch;
 
   window.fetch = async function (input, init) {
     var url = (typeof input === 'string') ? input : (input && input.url ? input.url : '');
 
     if (url.startsWith('/api/')) {
       try {
-        return await route(url, init);
+        // Force the lower-level WebView fetch wrapper to await a fresh
+        // Supabase response. React already rendered synchronously from the
+        // view cache, so this request is the silent revalidation phase.
+        window.__sfApiRouteRevalidating = (window.__sfApiRouteRevalidating || 0) + 1;
+        var response = await route(url, init);
+        if (((init && init.method) || 'GET').toUpperCase() === 'GET') {
+          cacheViewResponse(url, response);
+        }
+        return response;
       } catch (err) {
+        if (init && init.signal && init.signal.aborted) throw err;
+        if (err && err.name === 'AbortError') {
+          return errRes('Request cancelled. Please try again.', 499);
+        }
         console.error('[StarFollower API]', err);
         return errRes('Internal error: ' + err.message, 500);
+      } finally {
+        window.__sfApiRouteRevalidating = Math.max(
+          0,
+          (window.__sfApiRouteRevalidating || 1) - 1
+        );
       }
     }
 
     return _realFetch(input, init);
   };
 
-  console.log('[Star Follower] Supabase API layer v2.1 loaded ✓');
+  console.log('[Star Follower] Supabase API layer v2.3 loaded ✓ (instant auth, background profile sync)');
 })();

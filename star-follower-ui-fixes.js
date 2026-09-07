@@ -60,6 +60,9 @@
     document.body.classList.toggle('sf-login', path === '/login');
     document.body.classList.toggle('sf-home', path === '/' && isLoggedIn());
     document.body.classList.toggle('sf-earn', path === '/earn' && isLoggedIn());
+    document.body.classList.toggle('sf-services', path === '/services' && isLoggedIn());
+    document.body.classList.toggle('sf-orders', path === '/orders' && isLoggedIn());
+    document.body.classList.toggle('sf-referrals', path === '/referrals' && isLoggedIn());
   }
 
   function getCurrentUser() {
@@ -206,29 +209,11 @@
     });
   }
 
-  function createHomeVideoCard(videoUrl) {
-    if (!videoUrl || !document.body.classList.contains('sf-home')) return;
-    var main = document.querySelector('#root main');
-    if (!main || document.getElementById('sf-home-video-card')) return;
-
-    var card = document.createElement('a');
-    card.id = 'sf-home-video-card';
-    card.href = videoUrl;
-    card.target = '_blank';
-    card.rel = 'noopener noreferrer';
-    card.setAttribute('aria-label', 'सभी फ़ीचर्स समझने के लिए यहाँ क्लिक करें (वीडियो देखें)');
-    card.innerHTML =
-      '<span class="sf-home-video-title">🎬 ऐप कैसे इस्तेमाल करें? (वीडियो देखें)</span>' +
-      '<span>• Daily Task से कॉइन कैसे कमाएं?</span>' +
-      '<span>• 2 घंटे में Bonus कैसे पाएं?</span>' +
-      '<span>• Coins को Redeem कैसे करें?</span>' +
-      '<span>• सभी फ़ीचर्स समझने के लिए यहाँ क्लिक करें (वीडियो देखें)</span>';
-    main.insertBefore(card, main.firstElementChild);
-  }
-
   function ensureHomeVideoCard() {
-    if (!document.body.classList.contains('sf-home')) return;
-    fetchTutorialVideoUrl().then(createHomeVideoCard);
+    // The React bundle now owns the Home/Earn tutorial banner and modal.
+    // Keep this legacy DOM injector disabled so it cannot create an
+    // external target="_blank" link or duplicate the React component.
+    return;
   }
 
   function cleanHomeHero() {
@@ -266,13 +251,13 @@
     existing.style.color = isError ? '#f87171' : '#4ade80';
   }
 
-  function submitTenDigitRecovery(form, input, button) {
-    var code = String(input.value || '').replace(/\D/g, '').trim();
-    if (code.length > 10) code = code.slice(0, 10);
+  function submitRecovery(form, input, button) {
+    var code = String(input.value || '').replace(/[^a-zA-Z0-9]/g, '').toUpperCase().trim();
+    if (code.length > 6) code = code.slice(0, 6);
     input.value = code;
 
-    if (!/^\d{10}$/.test(code)) {
-      showRecoveryMessage('कृपया 10 अंकों का Recovery Code डालें।', true);
+    if (!/^[A-Z0-9]{6}$/.test(code)) {
+      showRecoveryMessage('कृपया 6-अंकीय Recovery Code डालें!', true);
       return;
     }
 
@@ -318,19 +303,19 @@
     var node;
     while ((node = walker.nextNode())) {
       if (node.nodeValue.indexOf('6-अंकीय') !== -1) {
-        node.nodeValue = node.nodeValue.replace(/6-अंकीय/g, '10-अंकीय');
+        node.nodeValue = node.nodeValue.replace(/6-अंकीय/g, '6-अंकीय');
       }
       if (node.nodeValue.indexOf('6-digit Recovery Code') !== -1) {
-        node.nodeValue = node.nodeValue.replace(/6-digit Recovery Code/g, '10-digit Recovery Code');
+        node.nodeValue = node.nodeValue.replace(/6-digit Recovery Code/g, '6-character Recovery Code');
       }
     }
 
-    input.placeholder = '10-अंकीय Recovery Code';
+    input.placeholder = '6-अंकीय Recovery Code';
     input.removeAttribute('maxlength');
-    input.setAttribute('maxlength', '10');
-    input.maxLength = 10;
-    input.setAttribute('aria-label', '10-अंकीय Recovery Code');
-    input.setAttribute('inputmode', 'numeric');
+    input.setAttribute('maxlength', '6');
+    input.maxLength = 6;
+    input.setAttribute('aria-label', '6-अंकीय Recovery Code');
+    input.removeAttribute('inputmode');
     input.setAttribute('type', 'text');
     input.setAttribute('autocomplete', 'one-time-code');
     input.removeAttribute('pattern');
@@ -350,10 +335,10 @@
 
       input.addEventListener('input', function (event) {
         event.stopImmediatePropagation();
-        var value = String(input.value || '').replace(/\D/g, '');
-        if (value.length > 10) value = value.slice(0, 10);
+        var value = String(input.value || '').replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+        if (value.length > 6) value = value.slice(0, 6);
         if (input.value !== value) input.value = value;
-        if (button) button.disabled = value.length !== 10;
+        if (button) button.disabled = value.length !== 6;
       }, true);
 
       input.addEventListener('invalid', function (event) {
@@ -364,17 +349,20 @@
       form.addEventListener('submit', function (event) {
         event.preventDefault();
         event.stopImmediatePropagation();
-        submitTenDigitRecovery(form, input, button);
+        submitRecovery(form, input, button);
       }, true);
     }
 
     recoveryForm = form;
     if (button) {
-      button.disabled = input.value.length !== 10;
+      button.disabled = input.value.length !== 6;
     }
   }
 
   function removeEmbeddedTutorialPlayers() {
+    var path = getAppRoutePath();
+    if (path !== '/services' && path !== '/orders' && path !== '/referrals') return;
+
     var main = document.querySelector('#root main');
     if (!main) return;
 
@@ -413,12 +401,52 @@
     if (matches.length > 1) matches[1].nodeValue = 'Instagram Reel Save';
   }
 
+  function normalizeServiceDeliveryTimes() {
+    if (getAppRoutePath() !== '/services') return;
+    var main = document.querySelector('#root main');
+    if (!main) return;
+
+    var targetText = 'Delivery Time: 0 to 1 Hour (0 मिनट से 1 घंटे के भीतर पूरा हो जाता है।)';
+    var serviceNames = [
+      'Instagram Followers',
+      'Instagram Repost',
+      'Instagram Reel Share',
+      'Instagram Likes',
+      'Instagram Reel Views',
+      'Instagram Post Views',
+      'Instagram Saves',
+      'Instagram Reel Save'
+    ];
+    var containers = main.querySelectorAll('div');
+
+    for (var i = 0; i < containers.length; i++) {
+      var container = containers[i];
+      var containerText = container.textContent || '';
+      if (containerText.indexOf('Delivery Time:') === -1) continue;
+      if (containerText.indexOf('Instagram Story Views') !== -1 ||
+          containerText.indexOf('Instagram Comments') !== -1) continue;
+
+      var isTargetService = false;
+      for (var j = 0; j < serviceNames.length; j++) {
+        if (containerText.indexOf(serviceNames[j]) !== -1) {
+          isTargetService = true;
+          break;
+        }
+      }
+      if (!isTargetService) continue;
+
+      var walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT);
+      var node;
+      while ((node = walker.nextNode())) {
+        if (node.nodeValue.indexOf('Delivery Time:') !== -1) {
+          node.nodeValue = targetText;
+        }
+      }
+    }
+  }
+
   function refreshPageEnhancements() {
     updateRouteClasses();
-    document.body.classList.toggle(
-      'sf-services',
-      getAppRoutePath() === '/services' && isLoggedIn()
-    );
     ensureHeaderCoins();
     syncSuccessfulOrdersCounter();
     hideApkBannerInApp();
@@ -427,6 +455,7 @@
     removeEmbeddedTutorialPlayers();
     patchRecoveryForm();
     renameDuplicateService();
+    normalizeServiceDeliveryTimes();
     ensureHomeVideoCard();
   }
 
@@ -442,25 +471,33 @@
     }
   }
 
-  new MutationObserver(normalizeDeviceToast).observe(document.body, {
-    childList: true,
-    subtree: true
-  });
-  normalizeDeviceToast();
+  function initUiFixes() {
+    new MutationObserver(normalizeDeviceToast).observe(document.body, {
+      childList: true,
+      subtree: true
+    });
+    normalizeDeviceToast();
 
-  // Suppress Save/Share menus when an icon or other app image is long-pressed.
-  document.addEventListener('contextmenu', function (event) {
-    if (event.target && event.target.closest && event.target.closest('img')) {
-      event.preventDefault();
-    }
-  }, true);
+    // Suppress Save/Share menus when an icon or other app image is long-pressed.
+    document.addEventListener('contextmenu', function (event) {
+      if (event.target && event.target.closest && event.target.closest('img')) {
+        event.preventDefault();
+      }
+    }, true);
 
-  document.addEventListener('click', routeQuickLogin, true);
+    document.addEventListener('click', routeQuickLogin, true);
 
-  refreshPageEnhancements();
-  new MutationObserver(refreshPageEnhancements).observe(document.body, {
-    childList: true,
-    subtree: true
-  });
-  setInterval(refreshPageEnhancements, 1200);
+    refreshPageEnhancements();
+    new MutationObserver(refreshPageEnhancements).observe(document.body, {
+      childList: true,
+      subtree: true
+    });
+    setInterval(refreshPageEnhancements, 1200);
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initUiFixes, { once: true });
+  } else {
+    setTimeout(initUiFixes, 0);
+  }
 }());

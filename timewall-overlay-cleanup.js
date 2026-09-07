@@ -1,7 +1,8 @@
 (function () {
   'use strict';
 
-  function removeTimeWallOverlay() {
+  function initTimeWallCleanup() {
+    function removeTimeWallOverlay() {
     document.querySelectorAll('.modal-backdrop, .modal-overlay, #overlay, [class*="backdrop"]').forEach(el => el.remove());
     document.body.style.overflow = 'auto';
 
@@ -12,9 +13,9 @@
       var container = iframe.closest('div[class*="fixed"][class*="inset-0"]');
       if (container) container.remove();
     }
-  }
+    }
 
-  function isTimeWallCloseControl(element) {
+    function isTimeWallCloseControl(element) {
     if (!document.querySelector('iframe[title="Earn Coins"]')) return false;
 
     var control = element && element.closest
@@ -33,17 +34,24 @@
       label === 'close' ||
       label.indexOf('back') !== -1 ||
       label.indexOf('close') !== -1;
-  }
+    }
 
   // React removes the TimeWall view after its click handler runs. Queue the
   // cleanup so it runs immediately after that state update.
-  document.addEventListener('click', function (event) {
-    if (isTimeWallCloseControl(event.target)) {
-      setTimeout(removeTimeWallOverlay, 0);
-    }
-  }, true);
+    document.addEventListener('click', function (event) {
+      if (isTimeWallCloseControl(event.target)) {
+        setTimeout(removeTimeWallOverlay, 0);
+      }
+    }, true);
 
-  // Covers browser/device back navigation while the offerwall is open.
-  window.addEventListener('popstate', removeTimeWallOverlay);
-  window.addEventListener('hashchange', removeTimeWallOverlay);
+    // Covers browser/device back navigation while the offerwall is open.
+    window.addEventListener('popstate', removeTimeWallOverlay);
+    window.addEventListener('hashchange', removeTimeWallOverlay);
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initTimeWallCleanup, { once: true });
+  } else {
+    setTimeout(initTimeWallCleanup, 0);
+  }
 }());
