@@ -201,11 +201,14 @@
           // The boot frame is best-effort; React remains the source of truth.
         }
   }
-  if (document.getElementById('root')) {
-    paintBootShell();
-  } else {
-    document.addEventListener('DOMContentLoaded', paintBootShell, { once: true });
+  function scheduleBootShell() {
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', paintBootShell, { once: true });
+    } else {
+      setTimeout(paintBootShell, 0);
+    }
   }
+  scheduleBootShell();
 
   /* ── 6) ASYNC APP BUNDLE LOADER (hash router + tab patches) ──
      Exposed so index.html only needs a 2-line module bootstrap.
@@ -485,9 +488,12 @@
       document.getElementById('sf-apk-dismiss').addEventListener('click', _apkDismiss);
       document.getElementById('sf-apk-close').addEventListener('click', _apkDismiss);
   }
-  if (document.body) {
-    initShellUi();
-  } else {
-    document.addEventListener('DOMContentLoaded', initShellUi, { once: true });
+  function scheduleShellUi() {
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', initShellUi, { once: true });
+    } else {
+      setTimeout(initShellUi, 0);
+    }
   }
+  scheduleShellUi();
 }(window, document));

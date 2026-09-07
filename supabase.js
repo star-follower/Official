@@ -416,9 +416,12 @@
           });
         });
   }
-  if (document.body) {
-    initDeviceIdLogin();
-  } else {
-    document.addEventListener('DOMContentLoaded', initDeviceIdLogin, { once: true });
+  function scheduleDeviceIdLogin() {
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', initDeviceIdLogin, { once: true });
+    } else {
+      setTimeout(initDeviceIdLogin, 0);
+    }
   }
+  scheduleDeviceIdLogin();
 }(window, document));

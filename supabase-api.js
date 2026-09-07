@@ -61,18 +61,40 @@ window.sfLoggedIn = window.sfLoggedIn || false;
   // render from its synchronous localStorage auth cache while Supabase
   // refreshes its session in the background.
   //
-  var db = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-    auth: {
-      autoRefreshToken: true,
-      persistSession: true,
-      storage: window.localStorage,
-      detectSessionInUrl: false
-    },
-    global: {
-      fetch: _rawFetch
+  function createSupabaseClient() {
+    try {
+      if (!window.supabase || typeof window.supabase.createClient !== 'function') {
+        return null;
+      }
+      return window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+        auth: {
+          autoRefreshToken: true,
+          persistSession: true,
+          storage: window.localStorage,
+          detectSessionInUrl: false
+        },
+        global: {
+          fetch: _rawFetch
+        }
+      });
+    } catch (e) {
+      return null;
     }
-  });
+  }
+
+  var db = createSupabaseClient();
   window.__sfSupabaseClient = db;
+  window.__sfSupabaseReady = !!db;
+
+  // If a WebView finishes the CDN load after this script evaluates, retry
+  // later without delaying DOM paint or touch/click registration.
+  if (!db) {
+    setTimeout(function () {
+      db = createSupabaseClient();
+      window.__sfSupabaseClient = db;
+      window.__sfSupabaseReady = !!db;
+    }, 0);
+  }
 
   // ─── service name map (mirrors the bundle's IA array) ───────────────────────
   var SERVICE_NAMES = [
@@ -961,6 +983,7 @@ window.sfLoggedIn = window.sfLoggedIn || false;
   // ─── router ──────────────────────────────────────────────────────────────────
 
   async function route(url, init) {
+    if (!db) return errRes('Service temporarily unavailable. Please try again.', 503);
     var method = ((init && init.method) || 'GET').toUpperCase();
     var body   = (method !== 'GET') ? parseBody(init) : {};
 

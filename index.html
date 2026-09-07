@@ -65,13 +65,22 @@
     <!-- MODULE LOAD ORDER — do not reorder. navigation.js installs the
          storage/history/scheduler layer; supabase.js must precede
          supabase-api.js so the offline-first fetch wrapper is lowest. -->
-    <script src="./navigation.js?v=modular-1"></script>
-    <script src="./supabase.js?v=modular-1"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
-    <script src="./supabase-api.js?v=20260818-base-path"></script>
-    <script src="./sf-webview-share.js?v=20260824-share-fix"></script>
-    <script src="./refer.js?v=modular-1"></script>
-    <script type="module">await window.__sfLoadAppBundle();</script>
+    <script defer src="./navigation.js?v=modular-1"></script>
+    <script defer src="./supabase.js?v=modular-1"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+    <script defer src="./supabase-api.js?v=20260818-base-path"></script>
+    <script defer src="./sf-webview-share.js?v=20260824-share-fix"></script>
+    <script defer src="./refer.js?v=modular-1"></script>
+    <script type="module">
+      try {
+        if (typeof window.__sfLoadAppBundle === 'function') {
+          await window.__sfLoadAppBundle();
+        }
+      } catch (error) {
+        // Keep the shell responsive if a network resource is unavailable.
+        console.warn('[Star Follower] App bundle deferred:', error);
+      }
+    </script>
 
   </head>
   <body>
@@ -166,10 +175,10 @@
     <div id="root"></div>
 
     <!-- ── Feature modules (order preserved from the monolith) ── -->
-    <script src="./earn.js?v=modular-1"></script>
-    <script src="./timewall-overlay-cleanup.js"></script>
-    <script src="./star-follower-ui-fixes.js?v=20260818-orders-timewall-login-apk"></script>
-    <script src="./services.js?v=modular-1"></script>
-    <script src="./orders.js?v=modular-1"></script>
+    <script defer src="./earn.js?v=modular-1"></script>
+    <script defer src="./timewall-overlay-cleanup.js"></script>
+    <script defer src="./star-follower-ui-fixes.js?v=20260818-orders-timewall-login-apk"></script>
+    <script defer src="./services.js?v=modular-1"></script>
+    <script defer src="./orders.js?v=modular-1"></script>
   </body>
 </html>

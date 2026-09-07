@@ -471,25 +471,33 @@
     }
   }
 
-  new MutationObserver(normalizeDeviceToast).observe(document.body, {
-    childList: true,
-    subtree: true
-  });
-  normalizeDeviceToast();
+  function initUiFixes() {
+    new MutationObserver(normalizeDeviceToast).observe(document.body, {
+      childList: true,
+      subtree: true
+    });
+    normalizeDeviceToast();
 
-  // Suppress Save/Share menus when an icon or other app image is long-pressed.
-  document.addEventListener('contextmenu', function (event) {
-    if (event.target && event.target.closest && event.target.closest('img')) {
-      event.preventDefault();
-    }
-  }, true);
+    // Suppress Save/Share menus when an icon or other app image is long-pressed.
+    document.addEventListener('contextmenu', function (event) {
+      if (event.target && event.target.closest && event.target.closest('img')) {
+        event.preventDefault();
+      }
+    }, true);
 
-  document.addEventListener('click', routeQuickLogin, true);
+    document.addEventListener('click', routeQuickLogin, true);
 
-  refreshPageEnhancements();
-  new MutationObserver(refreshPageEnhancements).observe(document.body, {
-    childList: true,
-    subtree: true
-  });
-  setInterval(refreshPageEnhancements, 1200);
+    refreshPageEnhancements();
+    new MutationObserver(refreshPageEnhancements).observe(document.body, {
+      childList: true,
+      subtree: true
+    });
+    setInterval(refreshPageEnhancements, 1200);
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initUiFixes, { once: true });
+  } else {
+    setTimeout(initUiFixes, 0);
+  }
 }());
