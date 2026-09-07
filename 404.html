@@ -49,6 +49,26 @@
     <meta name="theme-color" content="#0f1523" />
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <script>
+      (function () {
+        function fixFontPreload(link) {
+          if (link && link.rel === 'preload' && link.as === 'font' &&
+              !link.getAttribute('crossorigin')) {
+            link.setAttribute('crossorigin', 'anonymous');
+          }
+        }
+        document.querySelectorAll('link[rel="preload"][as="font"]').forEach(fixFontPreload);
+        try {
+          new MutationObserver(function (records) {
+            records.forEach(function (record) {
+              Array.prototype.forEach.call(record.addedNodes, function (node) {
+                if (node && node.tagName === 'LINK') fixFontPreload(node);
+              });
+            });
+          }).observe(document.documentElement, { childList: true, subtree: true });
+        } catch (e) {}
+      }());
+    </script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
     <script src="./supabase-api.js?v=20260818-base-path"></script>
