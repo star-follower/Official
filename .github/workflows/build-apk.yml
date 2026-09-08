@@ -34,15 +34,28 @@ jobs:
         run: |
           rm -rf dist android capacitor.config.json
           pnpm install --no-frozen-lockfile
+          
+          # Force relative paths in Vite build
+          npx vite build --base=./ || true
+          
+          # Fallback: Agar dist nahi bana ya incomplete hai
+          mkdir -p dist
+          cp -r *.html *.js *.css assets public dist/ 2>/dev/null || true
+
+          # Inject Base Tag inside index.html for Android Webview
           node -e '
             const fs = require("fs");
-            let config = fs.existsSync("vite.config.ts") ? fs.readFileSync("vite.config.ts", "utf8") : "";
-            if (!config.includes("base:")) {
-              config = config.replace("defineConfig({", "defineConfig({\n  base: \"./\",");
-              fs.writeFileSync("vite.config.ts", config);
+            if (fs.existsSync("dist/index.html")) {
+              let html = fs.readFileSync("dist/index.html", "utf8");
+              if (!html.includes("<base")) {
+                html = html.replace("<head>", "<head><base href=\"./\">");
+                fs.readFileSync("dist/index.html");
+                fs.writeFileSync("dist/index.html", html);
+              }
             }
           '
-          npx vite build
+
+          # Capacitor initialization
           pnpm add -w -D @capacitor/cli
           pnpm add -w @capacitor/core @capacitor/android
           npx cap init "Star Follower" "com.starfollower.official" --web-dir dist
@@ -60,3 +73,4 @@ jobs:
         with:
           name: Star-Follower-Official-APK
           path: android/app/build/outputs/apk/debug/app-debug.apk
+          
