@@ -35,14 +35,14 @@ jobs:
           rm -rf dist android capacitor.config.json
           pnpm install --no-frozen-lockfile
 
-          # Clean and Strict Vite Build with Relative Base
+          # Strict Vite Build with Relative Paths
           npx vite build --base=./
 
-          # Ensure Capacitor Dependencies
+          # Install Capacitor
           pnpm add -w -D @capacitor/cli
           pnpm add -w @capacitor/core @capacitor/android
 
-          # Initialize and Sync Capacitor
+          # Initialize & Sync Capacitor
           npx cap init "Star Follower" "com.starfollower.official" --web-dir dist
           npx cap add android
           npx cap sync android
