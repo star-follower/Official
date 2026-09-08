@@ -19,14 +19,15 @@ jobs:
         with:
           node-version: '20'
 
-      - name: Create Web Dir & Prepare Capacitor
+      - name: Build Web Assets & Run Capacitor
         run: |
-          mkdir -p www
-          cp -r index.html style.css *.js assets www/ 2>/dev/null || true
-          cp -r * www/ 2>/dev/null || true
           npm install --legacy-peer-deps
+          npm run build --if-present
+          mkdir -p dist
+          cp -r index.html *.css *.js assets dist/ 2>/dev/null || true
+          cp -r * dist/ 2>/dev/null || true
           npm install @capacitor/core @capacitor/cli @capacitor/android --legacy-peer-deps
-          npx cap init "Star Follower" "com.starfollower.official" --web-dir www
+          npx cap init "Star Follower" "com.starfollower.official" --web-dir dist
           npx cap add android
           npx cap sync android
 
@@ -47,4 +48,3 @@ jobs:
         with:
           name: Star-Follower-Official-APK
           path: android/app/build/outputs/apk/debug/app-debug.apk
-          
