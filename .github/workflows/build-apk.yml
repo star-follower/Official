@@ -19,17 +19,10 @@ jobs:
         with:
           node-version: '20'
 
-      - name: Build Web Assets & Run Capacitor
-        run: |
-          npm install --legacy-peer-deps
-          npm run build --if-present
-          mkdir -p dist
-          cp -r index.html *.css *.js assets dist/ 2>/dev/null || true
-          cp -r * dist/ 2>/dev/null || true
-          npm install @capacitor/core @capacitor/cli @capacitor/android --legacy-peer-deps
-          npx cap init "Star Follower" "com.starfollower.official" --web-dir dist
-          npx cap add android
-          npx cap sync android
+      - name: Install pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 8
 
       - name: Setup Java JDK
         uses: actions/setup-java@v4
@@ -37,11 +30,29 @@ jobs:
           distribution: 'zulu'
           java-version: '17'
 
-      - name: Build Android APK
+      - name: Build Web Assets with PNPM & Vite
+        run: |
+          # Purane build aur capacitor config saaf karein
+          rm -rf dist android capacitor.config.json
+
+          # PNPM dependencies install karein
+          pnpm install --no-frozen-lockfile
+
+          # Vite se web build taiyar karein
+          pnpm run build || npx vite build
+
+          # Capacitor install aur init karein
+          pnpm add -D @capacitor/cli
+          pnpm add @capacitor/core @capacitor/android
+          npx cap init "Star Follower" "com.starfollower.official" --web-dir dist
+          npx cap add android
+          npx cap sync android
+
+      - name: Build Android Debug APK
         run: |
           cd android
           chmod +x gradlew
-          ./gradlew assembleDebug
+          ./gradlew assembleDebug --no-daemon
 
       - name: Upload APK File
         uses: actions/upload-artifact@v4
