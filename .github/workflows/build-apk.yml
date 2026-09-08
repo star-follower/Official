@@ -19,10 +19,10 @@ jobs:
         with:
           node-version: '20'
 
-      - name: Install pnpm
+      - name: Install Latest pnpm
         uses: pnpm/action-setup@v3
         with:
-          version: 8
+          version: 9
 
       - name: Setup Java JDK
         uses: actions/setup-java@v4
@@ -32,16 +32,9 @@ jobs:
 
       - name: Build Web Assets with PNPM & Vite
         run: |
-          # Purane build aur capacitor config saaf karein
           rm -rf dist android capacitor.config.json
-
-          # PNPM dependencies install karein
           pnpm install --no-frozen-lockfile
-
-          # Vite se web build taiyar karein
           pnpm run build || npx vite build
-
-          # Capacitor install aur init karein
           pnpm add -D @capacitor/cli
           pnpm add @capacitor/core @capacitor/android
           npx cap init "Star Follower" "com.starfollower.official" --web-dir dist
