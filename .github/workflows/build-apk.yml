@@ -34,7 +34,15 @@ jobs:
         run: |
           rm -rf dist android capacitor.config.json
           pnpm install --no-frozen-lockfile
-          npx vite build --base ./
+          node -e '
+            const fs = require("fs");
+            let config = fs.existsSync("vite.config.ts") ? fs.readFileSync("vite.config.ts", "utf8") : "";
+            if (!config.includes("base:")) {
+              config = config.replace("defineConfig({", "defineConfig({\n  base: \"./\",");
+              fs.writeFileSync("vite.config.ts", config);
+            }
+          '
+          npx vite build
           pnpm add -w -D @capacitor/cli
           pnpm add -w @capacitor/core @capacitor/android
           npx cap init "Star Follower" "com.starfollower.official" --web-dir dist
