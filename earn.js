@@ -285,14 +285,30 @@
         _choice2Injected = true;
       }
 
-      // Poll to inject Choice 2 once data is available and Earn page is rendered
-      var _earnPollTimer = setInterval(function () {
-        if (document.hidden) return;
-        if (!_cachedCpaUrl   && window.__sfCpaLeadUrl)  _cachedCpaUrl   = window.__sfCpaLeadUrl;
-
-        if (_cachedCpaUrl)    injectChoice2Card(_cachedCpaUrl);
-
-        if (_choice2Injected) clearInterval(_earnPollTimer);
-      }, 800);
-      setTimeout(function () { clearInterval(_earnPollTimer); }, 60000);
+      // Wait for the data layer's one-time readiness signal instead of polling
+      // the DOM every 800ms for a full minute. The observer is only a fallback
+      // for cached data that was already available before this module ran.
+      var _choice2ReadyTimer = null;
+      function tryInjectChoice2() {
+        if (document.hidden || _choice2Injected) return;
+        if (!_cachedCpaUrl && window.__sfCpaLeadUrl) {
+          _cachedCpaUrl = window.__sfCpaLeadUrl;
+        }
+        if (_cachedCpaUrl) injectChoice2Card(_cachedCpaUrl);
+      }
+      window.addEventListener('sf-services-ready', tryInjectChoice2, { passive: true });
+      var scheduleChoice2 = window.__sfCoalesce
+        ? window.__sfCoalesce(tryInjectChoice2)
+        : function () {
+            clearTimeout(_choice2ReadyTimer);
+            _choice2ReadyTimer = setTimeout(tryInjectChoice2, 100);
+          };
+      new MutationObserver(scheduleChoice2).observe(document.documentElement, {
+        childList: true,
+        subtree: true
+      });
+      scheduleChoice2();
+      setTimeout(function () {
+        window.removeEventListener('sf-services-ready', tryInjectChoice2);
+      }, 30000);
 }());

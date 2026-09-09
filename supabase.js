@@ -165,16 +165,29 @@
         var API_MAX_CONCURRENT = 2;
         var _apiQueue = [];
         var _apiActive = 0;
+        var _apiRefreshes = Object.create(null);
+        var API_REVALIDATE_WINDOW = 15000;
 
         function pumpApiQueue() {
           while (_apiActive < API_MAX_CONCURRENT && _apiQueue.length) {
-            var job = _apiQueue.shift();
+            startApiJob(_apiQueue.shift());
+          }
+        }
+
+        function startApiJob(job) {
             _apiActive++;
             job.run().then(
-              function (v) { _apiActive--; job.resolve(v); pumpApiQueue(); },
-              function (e) { _apiActive--; job.reject(e); pumpApiQueue(); }
+              function (v) {
+                _apiActive--;
+                job.resolve(v);
+                pumpApiQueue();
+              },
+              function (e) {
+                _apiActive--;
+                job.reject(e);
+                pumpApiQueue();
+              }
             );
-          }
         }
 
         function enqueueApi(run) {
@@ -206,8 +219,33 @@
             through unchanged so cancellation remains caller-controlled. */
         var _nativeFetch = window.fetch ? window.fetch.bind(window) : null;
 
-         function timedFetch(input, init) {
-           return _nativeFetch(input, init);
+          function timedFetch(input, init) {
+            if (!_nativeFetch) return Promise.reject(new Error('Fetch unavailable'));
+            var source = init || {};
+            var controller = typeof AbortController === 'function'
+              ? new AbortController()
+              : null;
+            var request = Object.assign({}, source);
+            var timer = null;
+            var onAbort = null;
+
+            if (controller) {
+              request.signal = controller.signal;
+              if (source.signal && typeof source.signal.addEventListener === 'function') {
+                onAbort = function () { controller.abort(); };
+                if (source.signal.aborted) controller.abort();
+                else source.signal.addEventListener('abort', onAbort, { once: true });
+              }
+              timer = setTimeout(function () { controller.abort(); }, 15000);
+            }
+
+            return _nativeFetch(input, request).finally(function () {
+              if (timer) clearTimeout(timer);
+              if (onAbort && source.signal &&
+                  typeof source.signal.removeEventListener === 'function') {
+                source.signal.removeEventListener('abort', onAbort);
+              }
+            });
         }
 
          if (_nativeFetch) {
@@ -250,7 +288,7 @@
 
             var cached = getCachedEntry(url);
 
-            if (cached && !window.__sfApiRouteRevalidating) {
+              if (cached && !window.__sfApiRouteRevalidating) {
               // Offline-first: render instantly from cache, refresh
               // quietly in the background through the queue. Any
               // failure of the background refresh is swallowed — the
@@ -258,7 +296,15 @@
               // Background refresh is scheduled for idle time so it can
               // never compete with the render of the tab the user just
               // opened. The cached response resolves immediately.
-              idle(function () { enqueueApi(realRequest).catch(function () {}); });
+               var lastRefresh = _apiRefreshes[url] || 0;
+               if (Date.now() - lastRefresh >= API_REVALIDATE_WINDOW) {
+                 _apiRefreshes[url] = Date.now();
+                 idle(function () {
+                   enqueueApi(realRequest).catch(function () {
+                     /* Cached data remains the fallback for this screen. */
+                   });
+                 });
+               }
               return Promise.resolve(buildResponseFromCache(cached));
             }
 
@@ -301,7 +347,8 @@
 
         // Defer even the storage read so auth bootstrap cannot occupy the
         // first input/paint task on Android WebView.
-        window.__sfCachedAuthSession = null;
+         window.__sfCachedAuthSession = null;
+         window.__sfAuthSessionReady = false;
         setTimeout(function () {
           window.__sfCachedAuthSession =
             readJson(AUTH_CACHE_KEY) ||
@@ -317,11 +364,39 @@
           window.__sfCachedAuthSession = session;
         }
 
+        function attachAuthListener(client) {
+          if (window.__sfSupabaseAuthListenerAttached ||
+              !client || !client.auth ||
+              typeof client.auth.onAuthStateChange !== 'function') {
+            return;
+          }
+          window.__sfSupabaseAuthListenerAttached = true;
+          try {
+            client.auth.onAuthStateChange(function (event, session) {
+              if (session) cacheSession(session);
+              if (event === 'SIGNED_OUT') {
+                window.__sfCachedAuthSession = null;
+                try { localStorage.removeItem(AUTH_CACHE_KEY); } catch (e) {}
+              }
+              try {
+                window.dispatchEvent(new CustomEvent('sf-auth-state', {
+                  detail: { event: event, session: session || null }
+                }));
+              } catch (e) {}
+            });
+          } catch (e) {
+            window.__sfSupabaseAuthListenerAttached = false;
+          }
+        }
+        window.__sfAttachSupabaseAuth = attachAuthListener;
+
         function resolveSessionInBackground() {
           var client = window.__sfSupabaseClient;
           if (!client || !client.auth || typeof client.auth.getSession !== 'function') {
+            window.__sfAuthSessionReady = true;
             return;
           }
+          attachAuthListener(client);
 
           var sessionPromise;
           try {
@@ -341,6 +416,7 @@
             .catch(function () {
               // Cached auth remains authoritative for the first render.
               window.__sfAuthSessionReady = true;
+               window.dispatchEvent(new CustomEvent('sf-auth-session-ready'));
             });
         }
 

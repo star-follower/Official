@@ -26,6 +26,8 @@
         var toast    = document.getElementById('sf-order-toast');
         var toastMsg = document.getElementById('sf-toast-msg');
         var _timer   = null;
+         var _pollTimer = null;
+         var _toastTimers = [];
         var _lastChk = 0;
         var INTERVAL = 60000;
 
@@ -57,26 +59,45 @@
           .then(function (data) {
             var list = (data && Array.isArray(data.newCompleted)) ? data.newCompleted : [];
             list.forEach(function (o, i) {
-              setTimeout(function () {
+               var toastTimer = setTimeout(function () {
                 showToast(
                   'आपका ' + o.quantity + ' ' +
                   (SVC[o.serviceIndex] || 'Service') +
                   ' का ऑर्डर सफलतापूर्वक पूरा हो चुका है! 🎉'
                 );
               }, i * 10000);
+               _toastTimers.push(toastTimer);
             });
           })
           .catch(function () {});
         }
 
-        setTimeout(function () {
-          checkCompleted();
-          setInterval(checkCompleted, INTERVAL);
-        }, 5000);
+         function scheduleCheck(delay) {
+           clearTimeout(_pollTimer);
+           _pollTimer = setTimeout(function () {
+             checkCompleted();
+             if (!document.hidden) scheduleCheck(INTERVAL);
+           }, delay);
+         }
 
-        document.addEventListener('visibilitychange', function () {
-          if (!document.hidden) { _lastChk = 0; checkCompleted(); }
-        });
+         scheduleCheck(5000);
+
+         document.addEventListener('visibilitychange', function () {
+           if (!document.hidden) {
+             _lastChk = 0;
+             checkCompleted();
+             scheduleCheck(INTERVAL);
+           } else {
+             clearTimeout(_pollTimer);
+           }
+         }, { passive: true });
+
+         window.addEventListener('pagehide', function () {
+           clearTimeout(_timer);
+           clearTimeout(_pollTimer);
+           _toastTimers.forEach(clearTimeout);
+           _toastTimers = [];
+         }, { once: true, passive: true });
   }
   if (document.body) {
     initOrderToast();

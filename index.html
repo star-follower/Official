@@ -2,11 +2,14 @@
 <html lang="en">
   <head>
     <script>
-      // Global touch unblocker & Safe pointer events enforcer
+      // Keep the first WebView input frame free of long-running bootstrap work.
+      // This is intentionally one-shot; a safety interval here caused a
+      // document-wide selector scan every 100ms and starved taps on newer
+      // Android WebViews.
       window.addEventListener('DOMContentLoaded', function() {
-        document.body.style.pointerEvents = 'auto';
+        if (document.body) document.body.style.pointerEvents = 'auto';
         document.documentElement.style.pointerEvents = 'auto';
-      });
+      }, { once: true });
 
       // Prevent unhandled promise rejections from locking the main UI thread
       window.addEventListener('unhandledrejection', function(e) {
@@ -15,26 +18,15 @@
         if (document.documentElement) document.documentElement.style.pointerEvents = 'auto';
       });
 
-      // Safety interval to ensure pointer events are NEVER disabled longer than 100ms
-      setInterval(function() {
-        if (document.body && document.body.style.pointerEvents === 'none') {
-          document.body.style.pointerEvents = 'auto';
-        }
-        if (document.documentElement && document.documentElement.style.pointerEvents === 'none') {
+      // Recover pointer input after an asynchronous bootstrap failure without
+      // repeatedly walking the whole DOM. Navigation/back handlers perform the
+      // same reset when it is actually needed.
+      window.addEventListener('visibilitychange', function() {
+        if (!document.hidden) {
+          if (document.body) document.body.style.pointerEvents = 'auto';
           document.documentElement.style.pointerEvents = 'auto';
         }
-        document.querySelectorAll([
-          'body > [class*="backdrop"]',
-          'body > [class*="overlay"]',
-          '#root > [class*="backdrop"]',
-          '#root > [class*="overlay"]',
-          '[data-radix-dialog-overlay]'
-        ].join(',')).forEach(function(overlay) {
-          if (overlay && overlay.style.pointerEvents === 'none') {
-            overlay.style.pointerEvents = 'auto';
-          }
-        });
-      }, 100);
+      }, { passive: true });
     </script>
 
     <!-- Global site tag (gtag.js) - Google Analytics -->
@@ -95,32 +87,12 @@
         window.addEventListener('popstate', resetBackInteraction, false);
       }());
 
-      /* Service workers cleanup */
-      (function () {
-        function resetServiceWorkersSafely() {
-          try {
-            if (navigator.serviceWorker &&
-                typeof navigator.serviceWorker.getRegistrations === 'function') {
-              navigator.serviceWorker.getRegistrations().then(function (registrations) {
-                (registrations || []).forEach(function (registration) {
-                  try {
-                    var result = registration.unregister();
-                    if (result && typeof result.catch === 'function') result.catch(function () {});
-                  } catch (e) {}
-                });
-              }).catch(function () {});
-            }
-            if (window.caches && typeof window.caches.keys === 'function') {
-              window.caches.keys().then(function (keys) {
-                return Promise.all((keys || []).map(function (key) {
-                  try { return window.caches.delete(key); } catch (e) { return Promise.resolve(false); }
-                }));
-              }).catch(function () {});
-            }
-          } catch (e) {}
-        }
-        resetServiceWorkersSafely();
-      }());
+      /*
+       * Do not unregister service workers or delete every Cache Storage entry
+       * during startup. That work was asynchronous but still created a large
+       * amount of I/O exactly while Android was restoring a WebView session,
+       * and it defeated the app's offline-first data cache.
+       */
     </script>
     <link rel="icon" type="image/jpeg" href="./star-icon.jpg" />
     <link rel="apple-touch-icon" href="./star-icon.jpg" />

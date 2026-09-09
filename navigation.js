@@ -430,6 +430,16 @@
            ''
          )
          /*
+          * Do not install document-level gesture/touchmove preventDefault
+          * handlers in the compiled bundle. Android WebView uses those
+          * events to promote a finger gesture into a click; cancelling them
+          * globally can strand buttons after a modal/back transition.
+          */
+         .replace(
+           'document.addEventListener("gesturestart",n=>n.preventDefault(),{passive:!1});document.addEventListener("gesturechange",n=>n.preventDefault(),{passive:!1});document.addEventListener("gestureend",n=>n.preventDefault(),{passive:!1});document.addEventListener("touchmove",n=>{n.touches.length>1&&n.preventDefault()},{passive:!1});',
+           ''
+         )
+         /*
           * The imported component library installs a global scroll-isolation
           * listener that calls preventDefault() for touchmove. That is useful
           * for desktop dialogs but can strand Android WebViews after back
@@ -485,7 +495,7 @@
          */
         .replace(
           'function Pl({component:n,...r}){const[i,s]=pf(),u=ka();return g.useEffect(()=>{!u&&i!=="/login"&&s("/login")},[u,i,s]),u?v.jsx(KA,{children:v.jsx(n,{...r})}):null}function hO(){return v.jsxs(lS,{children:[v.jsx(Na,{path:"/login",component:FA}),v.jsx(Na,{path:"/",component:()=>v.jsx(Pl,{component:WA})}),v.jsx(Na,{path:"/services",component:()=>v.jsx(Pl,{component:tO})}),v.jsx(Na,{path:"/earn",component:()=>v.jsx(Pl,{component:rO})}),v.jsx(Na,{path:"/orders",component:()=>v.jsx(Pl,{component:iO})}),v.jsx(Na,{path:"/referrals",component:()=>v.jsx(Pl,{component:fO})}),v.jsx(Na,{children:v.jsx("div",{className:"p-8 text-center",children:"Not Found"})})]})}',
-          'function Pl(){const[n,r]=pf(),i=ka();g.useEffect(()=>{!i&&n!=="/login"&&r("/login")},[i,n,r]);const h=n==="/"?WA:n==="/services"?tO:n==="/earn"?rO:n==="/orders"?iO:n==="/referrals"?fO:null;return i?v.jsx(KA,{children:h?v.jsx(h,{}):v.jsx("div",{className:"p-8 text-center",children:"Not Found"})}):null}function hO(){return v.jsxs(lS,{children:[v.jsx(Na,{path:"/login",component:FA}),v.jsx(Na,{component:Pl})]})}'
+           'function Pl(){const[n,r]=pf(),i=ka();g.useEffect(()=>{if(!i&&n!=="/login"){const s=setTimeout(()=>{if(!ka())r("/login")},0);return()=>clearTimeout(s)}},[i,n,r]);const h=n==="/"?WA:n==="/services"?tO:n==="/earn"?rO:n==="/orders"?iO:n==="/referrals"?fO:null;return i?v.jsx(KA,{children:h?v.jsx(h,{}):v.jsx("div",{className:"p-8 text-center",children:"Not Found"})}):v.jsx("div",{className:"sf-auth-wait","aria-live":"polite",children:"Restoring session..."})}function hO(){return v.jsxs(lS,{children:[v.jsx(Na,{path:"/login",component:FA}),v.jsx(Na,{component:Pl})]})}'
         )
         /*
          * CPA/offer callbacks can arrive more than once from Android
@@ -496,9 +506,18 @@
           'const w=g.useCallback(async R=>{if(!(!R||R<=0))try{',
            'const w=g.useCallback(async R=>{if(!(!R||R<=0)&&(window.__sfCanSync?window.__sfCanSync("coins:"+n):!0))try{'
         )
-        .replace('const nC="/assets/', 'const nC=(window.__SF_BASE_PATH||"")+"/assets/')
-        .replace('const ZA="/assets/', 'const ZA=(window.__SF_BASE_PATH||"")+"/assets/')
-        .replace('const JA="/assets/', 'const JA=(window.__SF_BASE_PATH||"")+"/assets/')
+         .replace(
+           'const nC="/assets/',
+           'const nC=(window.__SF_BASE_PATH||"/").replace(/\\/+$/,"")+"/assets/'
+         )
+         .replace(
+           'const ZA="/assets/',
+           'const ZA=(window.__SF_BASE_PATH||"/").replace(/\\/+$/,"")+"/assets/'
+         )
+         .replace(
+           'const JA="/assets/',
+           'const JA=(window.__SF_BASE_PATH||"/").replace(/\\/+$/,"")+"/assets/'
+         )
         .replace(
           /https:\/\/star-follower\.netlify\.app`;window\.open\(`https:\/\/wa\.me\/\?text=\$\{encodeURIComponent\(q\)\}`,"_blank"\)/,
           'https://star-follower.github.io/Official/`;window.__sfShare(q,"Star Follower")'
@@ -618,16 +637,9 @@
         parent.replaceChild(gear, btn);
       }
 
-      /* Layer 3a — a short startup poll only. A tab switch replaces the
-         whole view subtree, so a 300 ms querySelector poll used to land
-         right on top of the new render; 1 s for 8 s then 3 s is plenty
-         and costs nothing perceptible. Paused while the app is hidden. */
-      var _pollLogout = function () { if (!document.hidden) patchLogout(); };
-      var _fast = setInterval(_pollLogout, 1000);
-      setTimeout(function () {
-        clearInterval(_fast);
-        setInterval(_pollLogout, 3000);
-      }, 8000);
+      /* MutationObserver below handles later React renders. A single delayed
+         scan is enough for the initial header and avoids a permanent timer. */
+      setTimeout(function () { if (!document.hidden) patchLogout(); }, 900);
 
       /* Layer 3b — MutationObserver, COALESCED. React inserting a whole
          tab view fires hundreds of mutation records; running a DOM query

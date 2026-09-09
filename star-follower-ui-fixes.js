@@ -472,7 +472,10 @@
   }
 
   function initUiFixes() {
-    new MutationObserver(normalizeDeviceToast).observe(document.body, {
+    var scheduleToastNormalization = window.__sfCoalesce
+      ? window.__sfCoalesce(normalizeDeviceToast)
+      : function () { setTimeout(normalizeDeviceToast, 0); };
+    new MutationObserver(scheduleToastNormalization).observe(document.body, {
       childList: true,
       subtree: true
     });
@@ -487,12 +490,20 @@
 
     document.addEventListener('click', routeQuickLogin, true);
 
+    var scheduleEnhancements = window.__sfCoalesce
+      ? window.__sfCoalesce(refreshPageEnhancements)
+      : function () { setTimeout(refreshPageEnhancements, 32); };
     refreshPageEnhancements();
-    new MutationObserver(refreshPageEnhancements).observe(document.body, {
+    new MutationObserver(scheduleEnhancements).observe(document.body, {
       childList: true,
       subtree: true
     });
-    setInterval(refreshPageEnhancements, 1200);
+    window.addEventListener('locationchange', scheduleEnhancements, { passive: true });
+    window.addEventListener('hashchange', scheduleEnhancements, { passive: true });
+    document.addEventListener('visibilitychange', function () {
+      if (!document.hidden) scheduleEnhancements();
+    }, { passive: true });
+    setTimeout(scheduleEnhancements, 1200);
   }
 
   if (document.readyState === 'loading') {

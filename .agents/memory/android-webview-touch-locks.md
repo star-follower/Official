@@ -22,3 +22,15 @@ not prove that the first touch task is free.
 error/rejection recovery, and defer storage-backed auth checks, Supabase
 client construction, session reconciliation, and initial data work until
 after the browser has yielded once.
+
+Avoid periodic document-wide pointer-event or overlay scans as a safety net;
+use one-shot visibility/back resets and coalesced mutation handling instead.
+
+**Why:** A frequent selector walk can consume the same main-thread time needed
+to turn a finger gesture into a click, recreating the touch freeze it is meant
+to prevent.
+
+**How to apply:** Make startup and route observers event-driven, deduplicate
+background refreshes, and never install global non-passive touch handlers that
+call `preventDefault()` unless the gesture is strictly scoped to an active
+control.

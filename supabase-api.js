@@ -78,6 +78,8 @@ window.sfLoggedIn = window.sfLoggedIn || false;
           autoRefreshToken: true,
           persistSession: true,
           storage: window.localStorage,
+          storageKey: 'sb-lgqovwlmicjinwrteivn-auth-token',
+          flowType: 'pkce',
           detectSessionInUrl: false
         },
         global: {
@@ -91,6 +93,7 @@ window.sfLoggedIn = window.sfLoggedIn || false;
 
   var db = null;
   var dbInitAttempts = 0;
+  var DB_INIT_MAX_ATTEMPTS = 20;
   var dbReadyResolve;
   var dbReady = new Promise(function (resolve) {
     dbReadyResolve = resolve;
@@ -105,11 +108,14 @@ window.sfLoggedIn = window.sfLoggedIn || false;
     db = createSupabaseClient();
     window.__sfSupabaseClient = db;
     window.__sfSupabaseReady = !!db;
-    if (db || dbInitAttempts >= 3) {
+    if (db && typeof window.__sfAttachSupabaseAuth === 'function') {
+      try { window.__sfAttachSupabaseAuth(db); } catch (e) {}
+    }
+    if (db || dbInitAttempts >= DB_INIT_MAX_ATTEMPTS) {
       dbReadyResolve(db);
       return;
     }
-    setTimeout(initializeSupabaseClient, 50);
+    setTimeout(initializeSupabaseClient, 100);
   }
   setTimeout(initializeSupabaseClient, 0);
 
@@ -165,27 +171,41 @@ window.sfLoggedIn = window.sfLoggedIn || false;
     try { return JSON.parse((init && init.body) || '{}'); } catch (e) { return {}; }
   }
 
+  var _viewStore = null;
+  var _viewFlushPending = false;
+  var VIEW_CACHE_FLUSH_DELAY = 250;
+
   function readViewCache() {
+    if (_viewStore) return _viewStore;
     try {
       var raw = localStorage.getItem(VIEW_CACHE_KEY);
       var parsed = raw ? JSON.parse(raw) : {};
-      return parsed && typeof parsed === 'object' ? parsed : {};
+      _viewStore = parsed && typeof parsed === 'object' ? parsed : {};
     } catch (e) {
-      return {};
+      _viewStore = {};
     }
+    return _viewStore;
   }
 
   function writeViewCache(cache) {
-    try {
-      var keys = Object.keys(cache);
-      keys.sort(function (a, b) {
-        return (cache[b].updatedAt || 0) - (cache[a].updatedAt || 0);
-      });
-      while (keys.length > VIEW_CACHE_LIMIT) delete cache[keys.pop()];
-      localStorage.setItem(VIEW_CACHE_KEY, JSON.stringify(cache));
-    } catch (e) {
-      // Storage is best-effort. Live API responses must never depend on it.
-    }
+    _viewStore = cache || {};
+    if (_viewFlushPending) return;
+    _viewFlushPending = true;
+    var flush = function () {
+      _viewFlushPending = false;
+      try {
+        var keys = Object.keys(_viewStore || {});
+        keys.sort(function (a, b) {
+          return (_viewStore[b].updatedAt || 0) - (_viewStore[a].updatedAt || 0);
+        });
+        while (keys.length > VIEW_CACHE_LIMIT) delete _viewStore[keys.pop()];
+        localStorage.setItem(VIEW_CACHE_KEY, JSON.stringify(_viewStore || {}));
+      } catch (e) {
+        // Storage is best-effort. Live API responses must never depend on it.
+      }
+    };
+    if (window.__sfIdle) window.__sfIdle(flush);
+    else setTimeout(flush, VIEW_CACHE_FLUSH_DELAY);
   }
 
   function cacheViewResponse(url, response) {
@@ -193,7 +213,7 @@ window.sfLoggedIn = window.sfLoggedIn || false;
     try {
       response.clone().json().then(function (data) {
         var cache = readViewCache();
-        cache[url] = { data: data, updatedAt: Date.now() };
+        cache[String(url || '').split('?')[0]] = { data: data, updatedAt: Date.now() };
         writeViewCache(cache);
       }).catch(function () {});
     } catch (e) {}
@@ -201,13 +221,24 @@ window.sfLoggedIn = window.sfLoggedIn || false;
 
   window.__sfReadViewCache = function (url, fallback) {
     var cache = readViewCache();
-    var entry = cache[url];
+    var entry = cache[String(url || '').split('?')[0]];
     return {
       data: entry && entry.data != null ? entry.data : fallback,
       updatedAt: entry && entry.updatedAt ? entry.updatedAt : 0,
       hasCachedData: !!entry
     };
   };
+
+  function clearViewCache() {
+    _viewStore = {};
+    writeViewCache(_viewStore);
+  }
+
+  function readCachedApiData(url) {
+    var entry = readViewCache()[String(url || '').split('?')[0]];
+    if (!entry || entry.data === undefined || entry.data === null) return null;
+    return entry;
+  }
 
   var _syncWindows = {};
   window.__sfCanSync = function (key, minimumWindowMs) {
@@ -273,7 +304,8 @@ window.sfLoggedIn = window.sfLoggedIn || false;
       if (data.userId) localStorage.setItem('sf_user_id', data.userId);
       if (data.token)  localStorage.setItem('sf_token', data.token);
       /* login state transition → keep the global flag in sync */
-      if (typeof window.sfIsLoggedIn === 'function') window.sfIsLoggedIn();
+      if (typeof window.sfSetLoggedIn === 'function') window.sfSetLoggedIn(true);
+      else if (typeof window.sfIsLoggedIn === 'function') window.sfIsLoggedIn();
       localStorage.setItem('sf_user_cache', JSON.stringify({
         data:      data,
         updatedAt: Date.now()
@@ -307,7 +339,8 @@ window.sfLoggedIn = window.sfLoggedIn || false;
     try {
       if (data.userId) localStorage.setItem('sf_user_id', data.userId);
       if (data.token) localStorage.setItem('sf_token', data.token);
-      if (typeof window.sfIsLoggedIn === 'function') window.sfIsLoggedIn();
+      if (typeof window.sfSetLoggedIn === 'function') window.sfSetLoggedIn(true);
+      else if (typeof window.sfIsLoggedIn === 'function') window.sfIsLoggedIn();
     } catch (e) {}
     syncFreshProfile(data).catch(function () {});
     return jsonRes(data);
@@ -840,6 +873,11 @@ window.sfLoggedIn = window.sfLoggedIn || false;
 
     // Cache globally so index.html patches can reference them without re-fetching
     try { window.__sfVideoUrl = videoUrl; window.__sfCpaLeadUrl = cpaLeadUrl; } catch (_) {}
+    try {
+      window.dispatchEvent(new CustomEvent('sf-services-ready', {
+        detail: { videoUrl: videoUrl, cpaLeadUrl: cpaLeadUrl }
+      }));
+    } catch (_) {}
 
     return jsonRes({ services: services, offerwallUrl: offerwallUrl, cpaLeadUrl: cpaLeadUrl, videoUrl: videoUrl });
   }
@@ -1047,6 +1085,36 @@ window.sfLoggedIn = window.sfLoggedIn || false;
     return errRes('Not found', 404);
   }
 
+  function withApiTimeout(promise, timeoutMs) {
+    var timer;
+    var timeout = new Promise(function (_, reject) {
+      timer = setTimeout(function () {
+        var error = new Error('The data request timed out.');
+        error.name = 'TimeoutError';
+        reject(error);
+      }, timeoutMs);
+    });
+    return Promise.race([promise, timeout]).finally(function () {
+      clearTimeout(timer);
+    });
+  }
+
+  var API_CACHE_MAX_AGE = 30000;
+  var _routeRefreshes = Object.create(null);
+
+  function refreshCachedRoute(url, init) {
+    if (_routeRefreshes[url]) return;
+    _routeRefreshes[url] = true;
+    withApiTimeout(route(url, init), 12000)
+      .then(function (response) {
+        if (response && response.ok) cacheViewResponse(url, response);
+      })
+      .catch(function () {})
+      .finally(function () {
+        delete _routeRefreshes[url];
+      });
+  }
+
   // ─── fetch override ──────────────────────────────────────────────────────────
 
   // Direct outbound calls use the captured async fetch layer without adding a
@@ -1055,21 +1123,41 @@ window.sfLoggedIn = window.sfLoggedIn || false;
 
   window.fetch = async function (input, init) {
     var url = (typeof input === 'string') ? input : (input && input.url ? input.url : '');
+    var method = ((init && init.method) || 'GET').toUpperCase();
 
     if (url.startsWith('/api/')) {
       try {
-        // Force the lower-level WebView fetch wrapper to await a fresh
+        if (method === 'GET') {
+          var cached = readCachedApiData(url);
+          if (cached) {
+            var age = Date.now() - (cached.updatedAt || 0);
+            if (age <= API_CACHE_MAX_AGE) {
+              refreshCachedRoute(url, init);
+              return jsonRes(cached.data);
+            }
+          }
+        } else {
+          // A successful write changes the profile/order/service views. Clear
+          // the in-memory cache immediately; the persisted copy is flushed
+          // during idle time and never blocks the tap that initiated the write.
+          clearViewCache();
+        }
+
+        // Force the lower-level WebView fetch wrapper to await a bounded
         // Supabase response. React already rendered synchronously from the
-        // view cache, so this request is the silent revalidation phase.
+        // view cache, so this is the silent revalidation phase when possible.
         window.__sfApiRouteRevalidating = (window.__sfApiRouteRevalidating || 0) + 1;
-        var response = await route(url, init);
-        if (((init && init.method) || 'GET').toUpperCase() === 'GET') {
+        var response = await withApiTimeout(
+          route(url, init),
+          method === 'GET' ? 12000 : 20000
+        );
+        if (method === 'GET') {
           cacheViewResponse(url, response);
         }
         return response;
       } catch (err) {
         if (init && init.signal && init.signal.aborted) throw err;
-        if (err && err.name === 'AbortError') {
+        if (err && (err.name === 'AbortError' || err.name === 'TimeoutError')) {
           return errRes('Request cancelled. Please try again.', 499);
         }
         console.error('[StarFollower API]', err);
