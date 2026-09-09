@@ -34,15 +34,30 @@ jobs:
         run: |
           rm -rf dist android capacitor.config.json
           pnpm install --no-frozen-lockfile
+          
+          # Force relative paths in Vite build
+          npx vite build --base=./ || true
+          
+          # Fallback: Agar dist nahi bana ya incomplete hai
+          mkdir -p dist
+          cp -r *.html *.js *.css assets public dist/ 2>/dev/null || true
 
-          # Strict Vite Build with Relative Paths
-          npx vite build --base=./
+          # Inject Base Tag inside index.html for Android Webview
+          node -e '
+            const fs = require("fs");
+            if (fs.existsSync("dist/index.html")) {
+              let html = fs.readFileSync("dist/index.html", "utf8");
+              if (!html.includes("<base")) {
+                html = html.replace("<head>", "<head><base href=\"./\">");
+                fs.readFileSync("dist/index.html");
+                fs.writeFileSync("dist/index.html", html);
+              }
+            }
+          '
 
-          # Install Capacitor
+          # Capacitor initialization
           pnpm add -w -D @capacitor/cli
           pnpm add -w @capacitor/core @capacitor/android
-
-          # Initialize & Sync Capacitor
           npx cap init "Star Follower" "com.starfollower.official" --web-dir dist
           npx cap add android
           npx cap sync android
