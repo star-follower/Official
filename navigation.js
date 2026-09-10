@@ -15,8 +15,86 @@
      6. Async app-bundle loader with hash-router / tab patches
      7. Header gear -> Settings modal, APK install banner
    ══════════════════════════════════════════════════════════════ */
-(function (window, document) {
+const APP_VERSION = "1.0.0";
+window.APP_VERSION = APP_VERSION;
+
+ (function (window, document) {
   'use strict';
+
+   function compareAppVersions(left, right) {
+     var a = String(left || '').replace(/^v/i, '').split('.');
+     var b = String(right || '').replace(/^v/i, '').split('.');
+     for (var i = 0; i < Math.max(a.length, b.length); i++) {
+       var av = parseInt(a[i] || '0', 10);
+       var bv = parseInt(b[i] || '0', 10);
+       if (!isFinite(av)) av = 0;
+       if (!isFinite(bv)) bv = 0;
+       if (av !== bv) return av > bv ? 1 : -1;
+     }
+     return 0;
+   }
+
+   function initUpdateModal() {
+     var modal = document.getElementById('sf-update-modal');
+     var close = document.getElementById('sf-update-close');
+     if (!modal) return;
+
+     if (close) {
+       close.addEventListener('click', function () {
+         if (modal.getAttribute('data-mandatory') !== 'true') {
+           modal.classList.remove('open');
+           modal.setAttribute('aria-hidden', 'true');
+         }
+       });
+     }
+     modal.addEventListener('click', function (event) {
+       if (event.target === modal &&
+           modal.getAttribute('data-mandatory') !== 'true') {
+         modal.classList.remove('open');
+         modal.setAttribute('aria-hidden', 'true');
+       }
+     });
+   }
+
+   window.__sfApplyUpdateSettings = function (settings) {
+     var modal = document.getElementById('sf-update-modal');
+     var latest = document.getElementById('sf-update-version');
+     var update = document.getElementById('sf-update-now');
+     var close = document.getElementById('sf-update-close');
+     if (!modal || !settings) return;
+
+     var latestVersion = String(settings.latest_version || '').trim();
+     var updateUrl = String(settings.update_url || '').trim();
+     if (!latestVersion || !updateUrl ||
+         compareAppVersions(latestVersion, APP_VERSION) <= 0) {
+       modal.classList.remove('open');
+       modal.setAttribute('aria-hidden', 'true');
+       return;
+     }
+
+     if (latest) latest.textContent = 'Version ' + latestVersion + ' is available';
+     if (update) {
+       update.onclick = function () {
+         if (typeof window.__sfOpenInAppBrowser === 'function') {
+           window.__sfOpenInAppBrowser(updateUrl);
+         } else {
+           window.location.assign(updateUrl);
+         }
+       };
+     }
+     var mandatory = settings.is_mandatory === true ||
+       String(settings.is_mandatory).toLowerCase() === 'true';
+     modal.setAttribute('data-mandatory', mandatory ? 'true' : 'false');
+     if (close) close.style.display = mandatory ? 'none' : '';
+     modal.classList.add('open');
+     modal.setAttribute('aria-hidden', 'false');
+   };
+
+   if (document.readyState === 'loading') {
+     document.addEventListener('DOMContentLoaded', initUpdateModal, { once: true });
+   } else {
+     initUpdateModal();
+   }
 
         /* ── 1) SAFE localStorage / sessionStorage ────────────────────
            If real localStorage throws on a basic read/write/delete
@@ -488,6 +566,23 @@
           'function aO(){return Gs({queryKey:["public-services"],queryFn:()=>qr("/api/services").then(n=>n.json()),staleTime:6e4})}',
           'function aO(){const n=window.__sfReadViewCache?window.__sfReadViewCache("/api/services",{services:[],offerwallUrl:"",cpaLeadUrl:"",videoUrl:""}):{data:{services:[],offerwallUrl:"",cpaLeadUrl:"",videoUrl:""},updatedAt:0};return Gs({queryKey:["public-services"],queryFn:()=>qr("/api/services").then(r=>r.json()),initialData:n.data,initialDataUpdatedAt:n.updatedAt,staleTime:0,refetchOnWindowFocus:!1,retry:1})}'
         )
+         /*
+          * Keep the Offerwall inside the app chrome. The old inset-0 layer
+          * covered the header and bottom nav, and the cleanup observer then
+          * removed broad fixed/backdrop nodes when Back was tapped.
+          */
+         .replace(
+           'Wsel!==null?v.jsxs("div",{className:"fixed inset-0 z-[9999] bg-white flex flex-col",',
+           'Wsel!==null?v.jsxs("div",{className:"sf-offerwall-overlay fixed z-[9999] bg-white flex flex-col",'
+         )
+         .replace(
+           'Wsel===1&&v.jsx("div",{style:{position:"absolute",top:0,left:0,right:0,height:"52px",background:"#0f1523",zIndex:20,pointerEvents:"none"}}),',
+           'null,'
+         )
+         .replace(
+           'style:{position:"absolute",top:Wsel===1?"58px":"8px",left:"10px"',
+           'style:{position:"absolute",top:"10px",left:"10px"'
+         )
         /*
          * Keep the authenticated layout mounted for all app tabs. Only the
          * route view changes, inside a React transition, so the header and

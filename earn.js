@@ -110,6 +110,9 @@
        window.addEventListener('focus', function () {
          window.setTimeout(restoreTimewallReturnRoute, 80);
        });
+       // Also cover a full WebView document restore after same-document
+       // navigation to a task URL.
+       window.setTimeout(restoreTimewallReturnRoute, 0);
 
       // ── Open in Chrome Custom Tabs (Android) / new tab ────────────
       function openExternal(href) {
@@ -117,10 +120,12 @@
         href = injectSubid(href);
         // window.open(_blank) → Chrome Custom Tabs on Android.
         // noopener prevents the child from accessing window.opener.
-        var win = window.open(href, '_blank', 'noopener,noreferrer');
-        if (!win) {
-          // Pop-up blocked (desktop) → same-tab fallback
-          window.location.href = href;
+        if (typeof window.__sfOpenInAppBrowser === 'function') {
+          window.__sfOpenInAppBrowser(href);
+        } else {
+          // Same-document navigation keeps the task inside the WebView when
+          // the native in-app browser bridge has not loaded yet.
+          window.location.assign(href);
         }
       }
 
@@ -202,7 +207,8 @@
       window.open = function (url, target, features) {
         if (typeof url === 'string' && isOfferwallUrl(url)) {
            saveTimewallReturnRoute();
-          return _realOpen(injectSubid(url), '_blank', 'noopener,noreferrer');
+          openExternal(url);
+          return null;
         }
         return _realOpen(url, target, features);
       };
@@ -275,10 +281,20 @@
           '<div style="background:linear-gradient(90deg,#10b981,#34d399);color:#000;font-weight:800;font-size:13px;text-align:center;padding:9px;border-radius:10px;letter-spacing:0.04em;font-family:Inter,sans-serif">&#2340;&#2369;&#2352;&#2306;&#2340; &#2358;&#2369;&#2352;&#2370; &#2325;&#2352;&#2375;&#2306; \u2192</div>';
 
         c2wrap.addEventListener('click', function () {
-          window.open(fullUrl, '_blank', 'noopener,noreferrer');
+          if (typeof window.__sfOpenInAppBrowser === 'function') {
+            window.__sfOpenInAppBrowser(fullUrl);
+          } else {
+            window.location.assign(fullUrl);
+          }
         });
         c2wrap.addEventListener('keydown', function (e) {
-          if (e.key === 'Enter') window.open(fullUrl, '_blank', 'noopener,noreferrer');
+          if (e.key === 'Enter') {
+            if (typeof window.__sfOpenInAppBrowser === 'function') {
+              window.__sfOpenInAppBrowser(fullUrl);
+            } else {
+              window.location.assign(fullUrl);
+            }
+          }
         });
 
         earnContainer.appendChild(c2wrap);

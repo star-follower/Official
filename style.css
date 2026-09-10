@@ -4,6 +4,126 @@
    the previous monolithic index.html (3 <style> blocks, in order).
    ══════════════════════════════════════════════════════════════ */
 
+       /* ── In-app update modal ───────────────────────────────────── */
+       #sf-update-modal {
+         display: none;
+         position: fixed;
+         inset: 0;
+         z-index: 1000000;
+         align-items: center;
+         justify-content: center;
+         padding: 24px;
+         background: rgba(4, 8, 18, 0.84);
+         backdrop-filter: blur(12px);
+         -webkit-backdrop-filter: blur(12px);
+       }
+       #sf-update-modal.open { display: flex; }
+       .sf-update-card {
+         position: relative;
+         width: min(100%, 390px);
+         padding: 30px 24px 24px;
+         border: 1px solid rgba(212,175,55,0.34);
+         border-radius: 24px;
+         background: linear-gradient(145deg, #17213a 0%, #0c1324 72%);
+         box-shadow: 0 24px 70px rgba(0,0,0,0.52),
+           0 0 36px rgba(212,175,55,0.12);
+         text-align: center;
+         color: #f8fafc;
+         font-family: 'Inter', sans-serif;
+       }
+       .sf-update-close {
+         position: absolute;
+         top: 12px;
+         right: 14px;
+         width: 32px;
+         height: 32px;
+         border: 0;
+         border-radius: 50%;
+         background: rgba(255,255,255,0.08);
+         color: #cbd5e1;
+         font-size: 22px;
+         line-height: 1;
+         cursor: pointer;
+       }
+       .sf-update-icon {
+         width: 58px;
+         height: 58px;
+         margin: 0 auto 16px;
+         display: grid;
+         place-items: center;
+         border-radius: 18px;
+         background: linear-gradient(135deg, #d4af37, #f4d77d);
+         color: #101827;
+         font-size: 30px;
+         font-weight: 800;
+         box-shadow: 0 8px 24px rgba(212,175,55,0.22);
+       }
+       .sf-update-kicker {
+         margin: 0 0 7px;
+         color: #d4af37;
+         font-size: 11px;
+         font-weight: 800;
+         letter-spacing: 0.18em;
+       }
+       #sf-update-title {
+         margin: 0;
+         font-size: 23px;
+         line-height: 1.25;
+       }
+       .sf-update-version {
+         margin: 9px 0 0;
+         color: #f4d77d;
+         font-size: 13px;
+         font-weight: 700;
+       }
+       .sf-update-copy {
+         margin: 15px auto 22px;
+         max-width: 290px;
+         color: #aab5c8;
+         font-size: 13px;
+         line-height: 1.6;
+       }
+       .sf-update-now {
+         width: 100%;
+         min-height: 48px;
+         border: 0;
+         border-radius: 14px;
+         background: linear-gradient(135deg, #d4af37, #f4d77d);
+         color: #101827;
+         font-size: 15px;
+         font-weight: 800;
+         cursor: pointer;
+         box-shadow: 0 8px 22px rgba(212,175,55,0.2);
+       }
+
+       /* ── Offerwall surface ─────────────────────────────────────── */
+       .sf-offerwall-overlay {
+         top: 64px !important;
+         right: 0 !important;
+         bottom: calc(70px + env(safe-area-inset-bottom)) !important;
+         left: 0 !important;
+         width: 100% !important;
+         height: auto !important;
+         max-width: 480px;
+         margin: 0 auto;
+         overflow: hidden;
+         border-radius: 0;
+         isolation: isolate;
+       }
+       .sf-offerwall-overlay iframe[title="Earn Coins"] {
+         display: block;
+         width: 100% !important;
+         height: 100% !important;
+         min-height: 0 !important;
+         flex: 1 1 auto;
+         border: 0;
+       }
+       .sf-offerwall-overlay > button {
+         top: 10px !important;
+         left: 10px !important;
+         z-index: 3;
+       }
+
 /* ── BLOCK 1 — App shell, settings modal, banners, toast, tutorial ── */
       /*
        * ═══════════════════════════════════════════════════════════════

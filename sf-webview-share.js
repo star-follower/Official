@@ -26,37 +26,95 @@
     return /android/i.test(navigator.userAgent || '');
   }
 
-  /* Opens a URL the way that best matches the current runtime:
-     - Android WebView: window.open (Chrome Custom Tab) or location fallback
-     - Everything else: window.open with noopener */
-  function openUrl(url) {
-    var win = window.open(url, '_blank', 'noopener,noreferrer');
-    if (!win) window.location.href = url;
+  /*
+   * Open a task/update URL without handing it to the outer Chrome app.
+   *
+   * Native wrappers differ in the bridge method they expose, so support the
+   * common Android, React Native WebView, and GoNative shapes first. When no
+   * bridge exists, same-document navigation keeps the URL inside the current
+   * WebView and Android Back returns to the app. Crucially, there is no
+   * window.open() fallback here: that is what launches the outer browser in
+   * the affected APK.
+   */
+  function openInAppBrowser(url) {
+    if (!url || !/^https?:\/\//i.test(String(url))) return false;
+    url = String(url);
+
+    var bridges = [
+      [window.Android, ['openInAppBrowser', 'openCustomTab', 'openUrl']],
+      [window.SFAndroid, ['openInAppBrowser', 'openCustomTab', 'openUrl']],
+      [window.AndroidShare, ['openInAppBrowser', 'openCustomTab', 'openUrl']]
+    ];
+    for (var i = 0; i < bridges.length; i++) {
+      var bridge = bridges[i][0];
+      var methods = bridges[i][1];
+      if (!bridge) continue;
+      for (var j = 0; j < methods.length; j++) {
+        try {
+          if (typeof bridge[methods[j]] === 'function') {
+            bridge[methods[j]](url);
+            return true;
+          }
+        } catch (e) {}
+      }
+    }
+
+    try {
+      if (window.gonative && window.gonative.webview) {
+        if (typeof window.gonative.webview.openUrl === 'function') {
+          window.gonative.webview.openUrl(url);
+          return true;
+        }
+        if (typeof window.gonative.webview.open === 'function') {
+          window.gonative.webview.open(url);
+          return true;
+        }
+      }
+    } catch (e) {}
+
+    try {
+      if (window.ReactNativeWebView &&
+          typeof window.ReactNativeWebView.postMessage === 'function') {
+        window.ReactNativeWebView.postMessage(JSON.stringify({
+          type: 'open_in_app_browser',
+          url: url
+        }));
+        return true;
+      }
+    } catch (e) {}
+
+    try {
+      window.location.assign(url);
+      return true;
+    } catch (e) {
+      return false;
+    }
   }
+
+  window.__sfOpenInAppBrowser = openInAppBrowser;
 
   /* Final-resort fallback when neither a native bridge nor
      navigator.share is usable: hand the text to WhatsApp directly.
-     On Android we try the app deep link first (whatsapp://) so the
-     WhatsApp app itself opens instead of a browser tab; if nothing
-     intercepts that scheme within ~1.2s (app not installed, or the
-     WebView refuses custom schemes) we fall back to the wa.me web
-     link, which always works in a Custom Tab / browser. */
+     Never open wa.me/api.whatsapp.com here; those URLs are what route the
+     user into the outer browser instead of the installed WhatsApp app. */
   function shareFallback(text) {
     var encoded = encodeURIComponent(text);
-    var waWebUrl = 'https://wa.me/?text=' + encoded;
-
-    if (!isAndroid()) {
-      openUrl(waWebUrl);
-      return;
-    }
-
     var waAppUrl = 'whatsapp://send?text=' + encoded;
     var settled = false;
 
     var fallbackTimer = setTimeout(function () {
       if (settled) return;
       settled = true;
-      openUrl(waWebUrl);
+      try {
+        if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+          navigator.clipboard.writeText(text);
+        }
+      } catch (e) {}
+      try {
+        window.dispatchEvent(new CustomEvent('sf-share-unavailable', {
+          detail: { text: text }
+        }));
+      } catch (e) {}
     }, 1200);
 
     /* If the WhatsApp app intercepts the scheme, the WebView/page is
@@ -74,7 +132,11 @@
       window.location.href = waAppUrl;
     } catch (e) {
       clearTimeout(fallbackTimer);
-      openUrl(waWebUrl);
+      try {
+        window.dispatchEvent(new CustomEvent('sf-share-unavailable', {
+          detail: { text: text }
+        }));
+      } catch (ignore) {}
     }
   }
 

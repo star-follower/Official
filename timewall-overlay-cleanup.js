@@ -4,21 +4,21 @@
   function initTimeWallCleanup() {
     function removeTimeWallOverlay() {
       try {
-        document.querySelectorAll('.modal-backdrop, .modal-overlay, #overlay, [class*="backdrop"]').forEach(el => el.remove());
-        if (document.body) document.body.style.overflow = 'auto';
-
-        // The React close handler normally unmounts this container. Remove it as
-        // a fallback as well so a stale iframe can never cover the Earn page.
-        var iframe = document.querySelector('iframe[title="Earn Coins"]');
-        if (iframe) {
-          var container = iframe.closest('div[class*="fixed"][class*="inset-0"]');
-          if (container) container.remove();
+        document.querySelectorAll('.sf-offerwall-overlay').forEach(function (el) {
+          el.remove();
+        });
+        if (document.body) {
+          document.body.style.overflow = '';
+          document.body.style.pointerEvents = 'auto';
+        }
+        if (document.documentElement) {
+          document.documentElement.style.pointerEvents = 'auto';
         }
       } catch (e) {}
     }
 
     function isTimeWallCloseControl(element) {
-    if (!document.querySelector('iframe[title="Earn Coins"]')) return false;
+    if (!document.querySelector('.sf-offerwall-overlay iframe[title="Earn Coins"]')) return false;
 
     var control = element && element.closest
       ? element.closest('button, [role="button"], a')

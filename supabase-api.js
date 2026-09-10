@@ -94,12 +94,46 @@ window.sfLoggedIn = window.sfLoggedIn || false;
   var db = null;
   var dbInitAttempts = 0;
   var DB_INIT_MAX_ATTEMPTS = 20;
+  var appSettingsChecked = false;
   var dbReadyResolve;
   var dbReady = new Promise(function (resolve) {
     dbReadyResolve = resolve;
   });
   window.__sfSupabaseClient = null;
   window.__sfSupabaseReady = false;
+
+  async function loadAppSettings(client) {
+    if (appSettingsChecked || !client) return;
+    appSettingsChecked = true;
+    try {
+      var result = await client
+        .from('app_settings')
+        .select('*')
+        .limit(20);
+      var rows = result && Array.isArray(result.data) ? result.data : [];
+      var settings = rows.find(function (row) {
+        return row && (row.latest_version || row.update_url ||
+          row.is_mandatory !== undefined);
+      }) || null;
+      if (!settings) {
+        var keyValueSettings = {};
+        rows.forEach(function (row) {
+          if (!row || !row.key) return;
+          keyValueSettings[String(row.key)] = row.value;
+        });
+        if (keyValueSettings.latest_version || keyValueSettings.update_url ||
+            keyValueSettings.is_mandatory !== undefined) {
+          settings = keyValueSettings;
+        }
+      }
+      if (!result.error && settings &&
+          typeof window.__sfApplyUpdateSettings === 'function') {
+        window.__sfApplyUpdateSettings(settings);
+      }
+    } catch (e) {
+      // A missing table or restrictive policy must never block app startup.
+    }
+  }
 
   // Client construction is deferred until after the first frame. Requests
   // that arrive before then await this promise without blocking the browser.
@@ -108,6 +142,7 @@ window.sfLoggedIn = window.sfLoggedIn || false;
     db = createSupabaseClient();
     window.__sfSupabaseClient = db;
     window.__sfSupabaseReady = !!db;
+    if (db) setTimeout(function () { loadAppSettings(db); }, 0);
     if (db && typeof window.__sfAttachSupabaseAuth === 'function') {
       try { window.__sfAttachSupabaseAuth(db); } catch (e) {}
     }
