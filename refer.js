@@ -56,13 +56,14 @@
         }
       } catch (e) {}
 
-      try {
-        window.open(
-          'https://wa.me/?text=' + encodeURIComponent(message),
-          '_blank',
-          'noopener,noreferrer'
-        );
-      } catch (e) {}
+       try {
+         if (typeof window.__sfShare === 'function') {
+           window.__sfShare(message, title || 'Star Follower');
+         } else {
+           window.location.href = 'whatsapp://send?text=' +
+             encodeURIComponent(message);
+         }
+       } catch (e) {}
     };
   }
 }(window));

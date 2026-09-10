@@ -1,1 +1,2 @@
 - [Android WebView touch locks](android-webview-touch-locks.md) — compiled UI bundles may need global touch scroll-lock listeners disabled before import.
+- [App settings compatibility](app-settings-compatibility.md) — the live app_settings table is currently key/value-shaped, so update checks must tolerate both schemas.
