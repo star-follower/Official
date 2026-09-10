@@ -583,6 +583,10 @@ window.APP_VERSION = APP_VERSION;
            'style:{position:"absolute",top:Wsel===1?"58px":"8px",left:"10px"',
            'style:{position:"absolute",top:"10px",left:"10px"'
          )
+        .replace(
+          'v.jsx("button",{onClick:()=>{Wset(null);h(!1)},style:{position:"absolute"',
+          'v.jsx("button",{type:"button",className:"sf-offerwall-back","aria-label":"Close offerwall",onClick:()=>{Wset(null);h(!1)},style:{position:"absolute"'
+        )
         /*
          * Keep the authenticated layout mounted for all app tabs. Only the
          * route view changes, inside a React transition, so the header and

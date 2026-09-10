@@ -5,7 +5,7 @@
           MutationObserver, click capture, window.open) so offerwalls
           open in Chrome Custom Tabs instead of a blocked iframe
      5.   Return-route restore when the user comes back from an offer
-     6.   Choice 2 instant-coins card injection
+     6.   Offerwall navigation interception only
    ══════════════════════════════════════════════════════════════ */
 (function () {
   'use strict';
@@ -214,117 +214,9 @@
       };
 
 
-  /* ── 6) CHOICE 2 CARD INJECTION ────────────────────────────── */
-  var _cachedCpaUrl = '';
-      var _choice2Injected = false;
-
-      function injectChoice2Card(cpaLeadUrl) {
-        if (_choice2Injected || !cpaLeadUrl) return;
-
-        var containers = document.querySelectorAll('[class*="flex"][class*="flex-col"]');
-        var earnContainer = null;
-        for (var ci = 0; ci < containers.length; ci++) {
-          var ct = containers[ci];
-          var ctext = ct.textContent || '';
-          if ((ctext.indexOf('Choice 1') !== -1 || ctext.indexOf('Coins Earn') !== -1 ||
-               ctext.indexOf('कॉइन') !== -1 || ctext.indexOf('Offers') !== -1) &&
-              ctext.indexOf('Admin') === -1) {
-            earnContainer = ct;
-            break;
-          }
-        }
-        if (!earnContainer) return;
-
-        // Check if bundle already rendered Choice 2
-        var allSpans = earnContainer.querySelectorAll('span, div');
-        for (var si = 0; si < allSpans.length; si++) {
-          if ((allSpans[si].textContent || '').indexOf('Choice 2') !== -1) {
-            _choice2Injected = true;
-            return; // already present
-          }
-        }
-        if (document.getElementById('sf-earn-choice2-patch')) {
-          _choice2Injected = true;
-          return;
-        }
-
-        // Build the Choice 2 card (matches the bundle's visual style)
-        var uid = localStorage.getItem('sf_user_id') || '';
-        var fullUrl = uid
-          ? cpaLeadUrl.replace(/\{userid\}/gi, uid).replace(/%7Buserid%7D/gi, uid)
-          : cpaLeadUrl;
-
-        var c2wrap = document.createElement('div');
-        c2wrap.id        = 'sf-earn-choice2-patch';
-        c2wrap.role      = 'button';
-        c2wrap.tabIndex  = 0;
-        c2wrap.style.cssText = [
-          'background:linear-gradient(135deg,#001a0d 0%,#002a18 40%,#000a05 100%)',
-          'box-shadow:0 0 18px 2px rgba(16,185,129,0.12),0 4px 20px rgba(0,0,0,0.5)',
-          'border:2px solid rgba(16,185,129,0.5)',
-          'border-radius:16px',
-          'padding:20px',
-          'display:flex',
-          'flex-direction:column',
-          'gap:12px',
-          'cursor:pointer',
-          'user-select:none',
-          'flex-shrink:0'
-        ].join(';');
-
-        c2wrap.innerHTML =
-          '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap">' +
-            '<span style="display:flex;align-items:center;gap:8px;font-size:21px;font-weight:800;color:#6ee7b7;font-family:Inter,sans-serif">&#9889; Choice 2</span>' +
-            '<span style="background:linear-gradient(90deg,#10b981,#6ee7b7);color:#000;font-size:11px;font-weight:800;padding:4px 12px;border-radius:999px;white-space:nowrap;letter-spacing:0.03em;font-family:Inter,sans-serif">Instant Coins / &#2340;&#2369;&#2352;&#2306;&#2340; &#2325;&#2377;&#2311;&#2344;&#2381;&#2360;</span>' +
-          '</div>' +
-          '<p style="color:rgba(167,243,208,0.85);font-size:13px;line-height:1.5;font-family:Inter,sans-serif;margin:0">&#2340;&#2369;&#2352;&#2306;&#2340; coins &#2346;&#2366;&#2319;&#2306; \u2014 instant reward offers, quick &amp; easy</p>' +
-          '<div style="background:linear-gradient(90deg,#10b981,#34d399);color:#000;font-weight:800;font-size:13px;text-align:center;padding:9px;border-radius:10px;letter-spacing:0.04em;font-family:Inter,sans-serif">&#2340;&#2369;&#2352;&#2306;&#2340; &#2358;&#2369;&#2352;&#2370; &#2325;&#2352;&#2375;&#2306; \u2192</div>';
-
-        c2wrap.addEventListener('click', function () {
-          if (typeof window.__sfOpenInAppBrowser === 'function') {
-            window.__sfOpenInAppBrowser(fullUrl);
-          } else {
-            window.location.assign(fullUrl);
-          }
-        });
-        c2wrap.addEventListener('keydown', function (e) {
-          if (e.key === 'Enter') {
-            if (typeof window.__sfOpenInAppBrowser === 'function') {
-              window.__sfOpenInAppBrowser(fullUrl);
-            } else {
-              window.location.assign(fullUrl);
-            }
-          }
-        });
-
-        earnContainer.appendChild(c2wrap);
-        _choice2Injected = true;
-      }
-
-      // Wait for the data layer's one-time readiness signal instead of polling
-      // the DOM every 800ms for a full minute. The observer is only a fallback
-      // for cached data that was already available before this module ran.
-      var _choice2ReadyTimer = null;
-      function tryInjectChoice2() {
-        if (document.hidden || _choice2Injected) return;
-        if (!_cachedCpaUrl && window.__sfCpaLeadUrl) {
-          _cachedCpaUrl = window.__sfCpaLeadUrl;
-        }
-        if (_cachedCpaUrl) injectChoice2Card(_cachedCpaUrl);
-      }
-      window.addEventListener('sf-services-ready', tryInjectChoice2, { passive: true });
-      var scheduleChoice2 = window.__sfCoalesce
-        ? window.__sfCoalesce(tryInjectChoice2)
-        : function () {
-            clearTimeout(_choice2ReadyTimer);
-            _choice2ReadyTimer = setTimeout(tryInjectChoice2, 100);
-          };
-      new MutationObserver(scheduleChoice2).observe(document.documentElement, {
-        childList: true,
-        subtree: true
-      });
-      scheduleChoice2();
-      setTimeout(function () {
-        window.removeEventListener('sf-services-ready', tryInjectChoice2);
-      }, 30000);
+  /*
+   * Choice 1 and Choice 2 are rendered by the Earn route in the app bundle.
+   * This module intentionally does not create cards or append nodes to the
+   * document; doing that here makes Choice 2 appear on every route.
+   */
 }());

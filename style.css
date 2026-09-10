@@ -98,17 +98,19 @@
 
        /* ── Offerwall surface ─────────────────────────────────────── */
        .sf-offerwall-overlay {
-         top: 64px !important;
+         top: 0 !important;
          right: 0 !important;
-         bottom: calc(70px + env(safe-area-inset-bottom)) !important;
+         bottom: 0 !important;
          left: 0 !important;
-         width: 100% !important;
-         height: auto !important;
-         max-width: 480px;
-         margin: 0 auto;
+         width: 100vw !important;
+         height: 100vh !important;
+         height: 100dvh !important;
+         max-width: none !important;
+         margin: 0 !important;
          overflow: hidden;
          border-radius: 0;
          isolation: isolate;
+         overscroll-behavior: contain;
        }
        .sf-offerwall-overlay iframe[title="Earn Coins"] {
          display: block;
@@ -119,9 +121,15 @@
          border: 0;
        }
        .sf-offerwall-overlay > button {
-         top: 10px !important;
-         left: 10px !important;
+         top: calc(env(safe-area-inset-top) + 10px) !important;
+         left: max(10px, env(safe-area-inset-left)) !important;
          z-index: 3;
+         min-height: 40px;
+         padding: 8px 14px !important;
+         border-radius: 10px !important;
+         font-weight: 700;
+         line-height: 1;
+         box-shadow: 0 4px 16px rgba(0,0,0,0.24);
        }
 
 /* ── BLOCK 1 — App shell, settings modal, banners, toast, tutorial ── */

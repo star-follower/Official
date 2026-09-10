@@ -27,18 +27,33 @@
   }
 
   /*
-   * Open a task/update URL without handing it to the outer Chrome app.
+   * Open a task/update URL in Capacitor's in-app Browser first. The APK
+   * exposes the official plugin through Capacitor.Plugins.Browser, so this
+   * follows the same behavior as Browser.open({ url }) without handing the
+   * URL to the outer Chrome app.
    *
    * Native wrappers differ in the bridge method they expose, so support the
-   * common Android, React Native WebView, and GoNative shapes first. When no
-   * bridge exists, same-document navigation keeps the URL inside the current
-   * WebView and Android Back returns to the app. Crucially, there is no
-   * window.open() fallback here: that is what launches the outer browser in
-   * the affected APK.
+   * common Android, React Native WebView, and GoNative shapes after the
+   * Capacitor plugin. When no bridge exists, same-document navigation keeps
+   * the URL inside the current WebView and Android Back returns to the app.
    */
   function openInAppBrowser(url) {
     if (!url || !/^https?:\/\//i.test(String(url))) return false;
     url = String(url);
+
+    try {
+      var capacitor = window.Capacitor;
+      var Browser = capacitor && capacitor.Plugins && capacitor.Plugins.Browser;
+      if (Browser && typeof Browser.open === 'function') {
+        var openResult = Browser.open({ url: url });
+        if (openResult && typeof openResult.catch === 'function') {
+          openResult.catch(function () {
+            try { window.location.assign(url); } catch (e) {}
+          });
+        }
+        return true;
+      }
+    } catch (e) {}
 
     var bridges = [
       [window.Android, ['openInAppBrowser', 'openCustomTab', 'openUrl']],
