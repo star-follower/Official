@@ -3,7 +3,7 @@
    ──────────────────────────────────────────────────────────────
      1-4. Four offerwall interception layers (createElement,
           MutationObserver, click capture, window.open) so offerwalls
-          open in Chrome Custom Tabs instead of a blocked iframe
+          open in Capacitor Browser instead of a blocked iframe
      5.   Return-route restore when the user comes back from an offer
      6.   Offerwall navigation interception only
    ══════════════════════════════════════════════════════════════ */
@@ -114,18 +114,16 @@
        // navigation to a task URL.
        window.setTimeout(restoreTimewallReturnRoute, 0);
 
-      // ── Open in Chrome Custom Tabs (Android) / new tab ────────────
+      // ── Open TimeWall in the app's Browser/custom-tab surface ─────
       function openExternal(href) {
          saveTimewallReturnRoute();
         href = injectSubid(href);
-        // window.open(_blank) → Chrome Custom Tabs on Android.
-        // noopener prevents the child from accessing window.opener.
         if (typeof window.__sfOpenInAppBrowser === 'function') {
           window.__sfOpenInAppBrowser(href);
         } else {
-          // Same-document navigation keeps the task inside the WebView when
-          // the native in-app browser bridge has not loaded yet.
-          window.location.assign(href);
+          // Never use window.open/location.assign here: both can escape the
+          // wrapper. The Browser bridge is loaded before this module.
+          console.warn('[Star Follower] In-app Browser bridge unavailable');
         }
       }
 
@@ -143,6 +141,7 @@
             get: function () { return _srcVal; },
             set: function (val) {
               _srcVal = val;
+                if (el.hasAttribute('data-sf-in-app-browser-frame')) return;
               if (isOfferwallUrl(val)) {
                 // Prevent actual load — clear the src and open externally
                 setTimeout(function () { openExternal(val); }, 0);
@@ -167,6 +166,7 @@
         var iframes = document.querySelectorAll('iframe');
         for (var i = 0; i < iframes.length; i++) {
           var ifr = iframes[i];
+          if (ifr.hasAttribute('data-sf-in-app-browser-frame')) continue;
           var src = ifr.src || ifr.getAttribute('src') || '';
           if (isOfferwallUrl(src)) {
             if (ifr.parentNode) ifr.parentNode.removeChild(ifr);
