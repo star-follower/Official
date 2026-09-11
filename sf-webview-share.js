@@ -26,6 +26,56 @@
     return /android/i.test(navigator.userAgent || '');
   }
 
+  function closeInAppBrowserFallback() {
+    var overlay = document.getElementById('sf-in-app-browser-overlay');
+    if (!overlay) return;
+    overlay.remove();
+    document.body.classList.remove('sf-in-app-browser-open');
+    document.documentElement.classList.remove('sf-in-app-browser-open');
+  }
+
+  /*
+   * Browser.open is the primary path in the Capacitor APK. This fallback is
+   * deliberately an iframe mounted inside the current app document: it never
+   * calls window.open(), an external intent, or location.assign().
+   */
+  function openInAppBrowserFallback(url) {
+    closeInAppBrowserFallback();
+
+    var overlay = document.createElement('div');
+    overlay.id = 'sf-in-app-browser-overlay';
+    overlay.setAttribute('role', 'dialog');
+    overlay.setAttribute('aria-modal', 'true');
+    overlay.setAttribute('aria-label', 'Offer');
+
+    var header = document.createElement('div');
+    header.className = 'sf-in-app-browser-header';
+
+    var back = document.createElement('button');
+    back.type = 'button';
+    back.className = 'sf-in-app-browser-back';
+    back.setAttribute('aria-label', 'Close offer');
+    back.textContent = '✕ Back';
+    back.addEventListener('click', closeInAppBrowserFallback);
+
+    var frame = document.createElement('iframe');
+    frame.className = 'sf-in-app-browser-frame';
+    frame.title = 'Offer';
+    frame.setAttribute('data-sf-in-app-browser-frame', 'true');
+    frame.src = url;
+    frame.setAttribute('allow', 'autoplay; camera; microphone; payment');
+    frame.setAttribute('referrerpolicy', 'no-referrer-when-downgrade');
+
+    header.appendChild(back);
+    overlay.appendChild(header);
+    overlay.appendChild(frame);
+    document.body.appendChild(overlay);
+    document.body.classList.add('sf-in-app-browser-open');
+    document.documentElement.classList.add('sf-in-app-browser-open');
+    back.focus();
+    return true;
+  }
+
   /*
    * Open a task/update URL in Capacitor's in-app Browser first. The APK
    * exposes the official plugin through Capacitor.Plugins.Browser, so this
@@ -48,7 +98,7 @@
         var openResult = Browser.open({ url: url });
         if (openResult && typeof openResult.catch === 'function') {
           openResult.catch(function () {
-            try { window.location.assign(url); } catch (e) {}
+            openInAppBrowserFallback(url);
           });
         }
         return true;
@@ -56,9 +106,9 @@
     } catch (e) {}
 
     var bridges = [
-      [window.Android, ['openInAppBrowser', 'openCustomTab', 'openUrl']],
-      [window.SFAndroid, ['openInAppBrowser', 'openCustomTab', 'openUrl']],
-      [window.AndroidShare, ['openInAppBrowser', 'openCustomTab', 'openUrl']]
+      [window.Android, ['openInAppBrowser', 'openCustomTab']],
+      [window.SFAndroid, ['openInAppBrowser', 'openCustomTab']],
+      [window.AndroidShare, ['openInAppBrowser', 'openCustomTab']]
     ];
     for (var i = 0; i < bridges.length; i++) {
       var bridge = bridges[i][0];
@@ -76,10 +126,6 @@
 
     try {
       if (window.gonative && window.gonative.webview) {
-        if (typeof window.gonative.webview.openUrl === 'function') {
-          window.gonative.webview.openUrl(url);
-          return true;
-        }
         if (typeof window.gonative.webview.open === 'function') {
           window.gonative.webview.open(url);
           return true;
@@ -98,12 +144,7 @@
       }
     } catch (e) {}
 
-    try {
-      window.location.assign(url);
-      return true;
-    } catch (e) {
-      return false;
-    }
+    return openInAppBrowserFallback(url);
   }
 
   window.__sfOpenInAppBrowser = openInAppBrowser;

@@ -566,6 +566,16 @@ window.APP_VERSION = APP_VERSION;
           'function aO(){return Gs({queryKey:["public-services"],queryFn:()=>qr("/api/services").then(n=>n.json()),staleTime:6e4})}',
           'function aO(){const n=window.__sfReadViewCache?window.__sfReadViewCache("/api/services",{services:[],offerwallUrl:"",cpaLeadUrl:"",videoUrl:""}):{data:{services:[],offerwallUrl:"",cpaLeadUrl:"",videoUrl:""},updatedAt:0};return Gs({queryKey:["public-services"],queryFn:()=>qr("/api/services").then(r=>r.json()),initialData:n.data,initialDataUpdatedAt:n.updatedAt,staleTime:0,refetchOnWindowFocus:!1,retry:1})}'
         )
+        /*
+         * Choice 1 must never mount the iframe-based offerwall state. Open
+         * its already-substituted TimeWall URL directly through the shared
+         * Capacitor Browser adapter. Choice 2 intentionally keeps the
+         * Wsel=2 iframe path below for the in-app full-screen overlay.
+         */
+        .replace(
+          'onClick:()=>{h(!0);Wset(1)},onKeyDown:e=>{e.key==="Enter"&&(h(!0),Wset(1))}',
+          'onClick:()=>{h(!1),window.__sfOpenInAppBrowser&&window.__sfOpenInAppBrowser(S)},onKeyDown:e=>{e.key==="Enter"&&(h(!1),window.__sfOpenInAppBrowser&&window.__sfOpenInAppBrowser(S))}'
+        )
          /*
           * Keep the Offerwall inside the app chrome. The old inset-0 layer
           * covered the header and bottom nav, and the cleanup observer then
