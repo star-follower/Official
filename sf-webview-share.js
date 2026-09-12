@@ -22,70 +22,43 @@
 (function (window, document) {
   'use strict';
 
+  /*
+   * Capture the browser's original top-level opener before earn.js installs
+   * its offerwall interception wrapper. This keeps the non-Capacitor fallback
+   * from recursively re-entering the offerwall handler.
+   */
+  var nativeWindowOpen = typeof window.open === 'function'
+    ? window.open.bind(window)
+    : null;
+
   function isAndroid() {
     return /android/i.test(navigator.userAgent || '');
   }
 
-  function closeInAppBrowserFallback() {
-    var overlay = document.getElementById('sf-in-app-browser-overlay');
-    if (!overlay) return;
-    overlay.remove();
-    document.body.classList.remove('sf-in-app-browser-open');
-    document.documentElement.classList.remove('sf-in-app-browser-open');
-  }
-
   /*
-   * Browser.open is the primary path in the Capacitor APK. This fallback is
-   * deliberately an iframe mounted inside the current app document: it never
-   * calls window.open(), an external intent, or location.assign().
+   * Capacitor Browser is the primary path in the APK. If the plugin is not
+   * installed or rejects the request, use a real top-level browser window.
+   * TimeWall is never loaded into an iframe because its frame security headers
+   * make that path render as a blank page.
    */
-  function openInAppBrowserFallback(url) {
-    closeInAppBrowserFallback();
-
-    var overlay = document.createElement('div');
-    overlay.id = 'sf-in-app-browser-overlay';
-    overlay.setAttribute('role', 'dialog');
-    overlay.setAttribute('aria-modal', 'true');
-    overlay.setAttribute('aria-label', 'Offer');
-
-    var header = document.createElement('div');
-    header.className = 'sf-in-app-browser-header';
-
-    var back = document.createElement('button');
-    back.type = 'button';
-    back.className = 'sf-in-app-browser-back';
-    back.setAttribute('aria-label', 'Close offer');
-    back.textContent = '✕ Back';
-    back.addEventListener('click', closeInAppBrowserFallback);
-
-    var frame = document.createElement('iframe');
-    frame.className = 'sf-in-app-browser-frame';
-    frame.title = 'Offer';
-    frame.setAttribute('data-sf-in-app-browser-frame', 'true');
-    frame.src = url;
-    frame.setAttribute('allow', 'autoplay; camera; microphone; payment');
-    frame.setAttribute('referrerpolicy', 'no-referrer-when-downgrade');
-
-    header.appendChild(back);
-    overlay.appendChild(header);
-    overlay.appendChild(frame);
-    document.body.appendChild(overlay);
-    document.body.classList.add('sf-in-app-browser-open');
-    document.documentElement.classList.add('sf-in-app-browser-open');
-    back.focus();
-    return true;
+  function openTopLevelBrowserFallback(url) {
+    try {
+      if (nativeWindowOpen) {
+        return !!nativeWindowOpen(url, '_blank', 'location=yes');
+      }
+    } catch (e) {}
+    return false;
   }
 
   /*
    * Open a task/update URL in Capacitor's in-app Browser first. The APK
    * exposes the official plugin through Capacitor.Plugins.Browser, so this
-   * follows the same behavior as Browser.open({ url }) without handing the
-   * URL to the outer Chrome app.
+   * follows the same behavior as Browser.open({ url }).
    *
    * Native wrappers differ in the bridge method they expose, so support the
    * common Android, React Native WebView, and GoNative shapes after the
-   * Capacitor plugin. When no native bridge exists, the in-app iframe fallback
-   * keeps the URL inside the current app document.
+   * Capacitor plugin. When no native bridge exists, the URL opens in a
+   * top-level browser window instead of an iframe.
    */
   function openInAppBrowser(url) {
     if (!url || !/^https?:\/\//i.test(String(url))) return false;
@@ -104,7 +77,7 @@
         var openResult = Browser.open({ url: url });
         if (openResult && typeof openResult.catch === 'function') {
           openResult.catch(function () {
-            openInAppBrowserFallback(url);
+            openTopLevelBrowserFallback(url);
           });
         }
         return true;
@@ -150,7 +123,7 @@
       }
     } catch (e) {}
 
-    return openInAppBrowserFallback(url);
+    return openTopLevelBrowserFallback(url);
   }
 
   window.__sfOpenInAppBrowser = openInAppBrowser;
