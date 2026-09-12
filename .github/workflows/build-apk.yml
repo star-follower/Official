@@ -35,6 +35,10 @@ jobs:
           rm -rf dist android capacitor.config.json
           pnpm install --no-frozen-lockfile
           
+          # Install In-App Browser Plugin so TimeWall opens inside App
+          pnpm add -w @capacitor/core @capacitor/android @capacitor/browser
+          pnpm add -w -D @capacitor/cli
+
           # Force relative paths in Vite build
           npx vite build --base=./ || true
           
@@ -42,24 +46,64 @@ jobs:
           mkdir -p dist
           cp -r *.html *.js *.css assets public dist/ 2>/dev/null || true
 
-          # Inject Base Tag inside index.html for Android Webview
+          # Inject Base Tag & Auto In-App Tab Script inside index.html for Android Webview
           node -e '
             const fs = require("fs");
             if (fs.existsSync("dist/index.html")) {
               let html = fs.readFileSync("dist/index.html", "utf8");
               if (!html.includes("<base")) {
                 html = html.replace("<head>", "<head><base href=\"./\">");
-                fs.readFileSync("dist/index.html");
-                fs.writeFileSync("dist/index.html", html);
+              }
+              // Script to capture external clicks and open inside App
+              const inAppScript = `
+                <script>
+                  document.addEventListener("click", function(e) {
+                    const target = e.target.closest("a, button");
+                    if (target) {
+                      const href = target.getAttribute("href") || target.getAttribute("onclick");
+                      if (href && (href.includes("timewall") || href.includes("http"))) {
+                        if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Browser) {
+                          e.preventDefault();
+                          window.Capacitor.Plugins.Browser.open({ url: href });
+                        }
+                      }
+                    }
+                  }, true);
+                </script>
+              `;
+              html = html.replace("</head>", inAppScript + "</head>");
+              fs.writeFileSync("dist/index.html", html);
+            }
+          '
+
+          # Capacitor initialization with cleartext/browser support
+          npx cap init "Star Follower" "com.starfollower.official" --web-dir dist
+          
+          # Enable Cleartext Traffic and Allow external links inside Android Webview
+          node -e '
+            const fs = require("fs");
+            if (fs.existsSync("capacitor.config.json")) {
+              let config = JSON.parse(fs.readFileSync("capacitor.config.json", "utf8"));
+              config.server = { "cleartext": true, "allowNavigation": ["*"] };
+              fs.writeFileSync("capacitor.config.json", JSON.stringify(config, null, 2));
+            }
+          '
+
+          npx cap add android
+          
+          # Inject Allow UsesCleartextTraffic inside AndroidManifest.xml
+          node -e '
+            const fs = require("fs");
+            const manifestPath = "android/app/src/main/AndroidManifest.xml";
+            if (fs.existsSync(manifestPath)) {
+              let manifest = fs.readFileSync(manifestPath, "utf8");
+              if (!manifest.includes("android:usesCleartextTraffic")) {
+                manifest = manifest.replace("<application", "<application android:usesCleartextTraffic=\"true\" ");
+                fs.writeFileSync(manifestPath, manifest);
               }
             }
           '
 
-          # Capacitor initialization
-          pnpm add -w -D @capacitor/cli
-          pnpm add -w @capacitor/core @capacitor/android
-          npx cap init "Star Follower" "com.starfollower.official" --web-dir dist
-          npx cap add android
           npx cap sync android
 
       - name: Build Android Debug APK
