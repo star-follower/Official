@@ -84,8 +84,8 @@
    *
    * Native wrappers differ in the bridge method they expose, so support the
    * common Android, React Native WebView, and GoNative shapes after the
-   * Capacitor plugin. When no bridge exists, same-document navigation keeps
-   * the URL inside the current WebView and Android Back returns to the app.
+   * Capacitor plugin. When no native bridge exists, the in-app iframe fallback
+   * keeps the URL inside the current app document.
    */
   function openInAppBrowser(url) {
     if (!url || !/^https?:\/\//i.test(String(url))) return false;
@@ -93,7 +93,13 @@
 
     try {
       var capacitor = window.Capacitor;
-      var Browser = capacitor && capacitor.Plugins && capacitor.Plugins.Browser;
+      var Browser = capacitor && (
+        (capacitor.Plugins && capacitor.Plugins.Browser) ||
+        capacitor.Browser
+      );
+      if (!Browser && capacitor && typeof capacitor.registerPlugin === 'function') {
+        Browser = capacitor.registerPlugin('Browser');
+      }
       if (Browser && typeof Browser.open === 'function') {
         var openResult = Browser.open({ url: url });
         if (openResult && typeof openResult.catch === 'function') {
