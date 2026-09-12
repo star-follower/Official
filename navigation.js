@@ -570,7 +570,7 @@ window.APP_VERSION = APP_VERSION;
          * Choice 1 must never mount the iframe-based offerwall state. Open
          * its already-substituted TimeWall URL directly through the shared
          * Capacitor Browser adapter. Choice 2 intentionally keeps the
-         * Wsel=2 iframe path below for the in-app full-screen overlay.
+         * Wsel=2 offerwall path below.
          */
         .replace(
           'onClick:()=>{h(!0);Wset(1)},onKeyDown:e=>{e.key==="Enter"&&(h(!0),Wset(1))}',

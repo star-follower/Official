@@ -141,7 +141,6 @@
             get: function () { return _srcVal; },
             set: function (val) {
               _srcVal = val;
-                if (el.hasAttribute('data-sf-in-app-browser-frame')) return;
               if (isOfferwallUrl(val)) {
                 // Prevent actual load — clear the src and open externally
                 setTimeout(function () { openExternal(val); }, 0);
@@ -166,7 +165,6 @@
         var iframes = document.querySelectorAll('iframe');
         for (var i = 0; i < iframes.length; i++) {
           var ifr = iframes[i];
-          if (ifr.hasAttribute('data-sf-in-app-browser-frame')) continue;
           var src = ifr.src || ifr.getAttribute('src') || '';
           if (isOfferwallUrl(src)) {
             if (ifr.parentNode) ifr.parentNode.removeChild(ifr);
